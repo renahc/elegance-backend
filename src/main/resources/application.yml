@@ -5,15 +5,19 @@ spring:
   application:
     name: salon-backend
 
-  # MySQL Database configuration for elegancebd
+  # H2 / MySQL Database configuration for elegancebd
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/elegancebd?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    username: ${SPRING_DATASOURCE_USERNAME:root}
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:elegancebd;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
     password: ${SPRING_DATASOURCE_PASSWORD:}
 
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
   jpa:
-    database-platform: org.hibernate.dialect.MySQLDialect
     hibernate:
       ddl-auto: update
     defer-datasource-initialization: true
@@ -25,6 +29,7 @@ spring:
   sql:
     init:
       mode: always
+
 
   # Security OAuth2 Resource Server for Azure AD / Entra ID JWT validation
   security:
