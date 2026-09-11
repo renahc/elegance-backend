@@ -22,22 +22,26 @@ jobs:
       - name: Build Spring Boot JAR Package
         run: mvn clean package -DskipTests
 
-      - name: Deploy JAR file to AWS EC2 via SCP
+      - name: Deploy JAR file to EC2 home folder via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.AWS_EC2_HOST }}
           username: ${{ secrets.AWS_EC2_USERNAME }}
           key: ${{ secrets.AWS_EC2_SSH_KEY }}
           source: "target/salon-backend-1.0.0.jar"
-          target: "/opt/salon-backend"
+          target: "/home/ubuntu/backend-build"
           strip_components: 1
-          rm: false
+          rm: true
 
-      - name: Restart Spring Boot Service via SSH
+      - name: Deploy JAR and Restart Spring Boot Service via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.AWS_EC2_HOST }}
           username: ${{ secrets.AWS_EC2_USERNAME }}
           key: ${{ secrets.AWS_EC2_SSH_KEY }}
           script: |
+            sudo mkdir -p /opt/salon-backend
+            sudo cp /home/ubuntu/backend-build/salon-backend-1.0.0.jar /opt/salon-backend/app.jar
+            sudo chown -R ubuntu:ubuntu /opt/salon-backend
             sudo systemctl restart salon-backend || true
+
