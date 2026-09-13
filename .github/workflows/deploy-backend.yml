@@ -3,10 +3,10 @@ name: Elegance Backend CI/CD
 on:
   push:
     branches:
-      - 'Develop/Backend'
+      - 'Develop/Microservicios'
   pull_request:
     branches:
-      - 'Develop/Backend'
+      - 'Develop/Microservicios'
 
 jobs:
   # ==========================================
