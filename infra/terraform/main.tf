@@ -204,28 +204,77 @@ resource "aws_apigatewayv2_authorizer" "cognito_auth" {
 # ==========================================
 # INTEGRACIONES HTTP PROXY HACIA EC2
 # ==========================================
-resource "aws_apigatewayv2_integration" "user_service_int" {
+# User Service (Puerto 8082): Clientes
+resource "aws_apigatewayv2_integration" "clients_root_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
-  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/{proxy}"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/api/v1/clients"
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
 }
 
-resource "aws_apigatewayv2_integration" "appointment_service_int" {
+resource "aws_apigatewayv2_integration" "clients_proxy_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
-  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/{proxy}"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/api/v1/clients/{proxy}"
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
 }
 
-resource "aws_apigatewayv2_integration" "notification_service_int" {
+# User Service (Puerto 8082): Estilistas
+resource "aws_apigatewayv2_integration" "stylists_root_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
-  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8083/{proxy}"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/api/v1/stylists"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+}
+
+resource "aws_apigatewayv2_integration" "stylists_proxy_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/api/v1/stylists/{proxy}"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+}
+
+# Appointment Service (Puerto 8081): Citas
+resource "aws_apigatewayv2_integration" "appointments_root_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/api/v1/appointments"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+}
+
+resource "aws_apigatewayv2_integration" "appointments_proxy_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/api/v1/appointments/{proxy}"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+}
+
+# Notification Service (Puerto 8083): Notificaciones
+resource "aws_apigatewayv2_integration" "notifications_root_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8083/api/v1/notifications"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+}
+
+resource "aws_apigatewayv2_integration" "notifications_proxy_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8083/api/v1/notifications/{proxy}"
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
@@ -234,19 +283,28 @@ resource "aws_apigatewayv2_integration" "notification_service_int" {
 # ==========================================
 # RUTAS DE API GATEWAY (PROTEGIDAS CON COGNITO)
 # ==========================================
-# Clientes y Estilistas (User Service: 8082)
-resource "aws_apigatewayv2_route" "clients_route" {
+# Clientes (User Service: 8082)
+resource "aws_apigatewayv2_route" "clients_root_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/clients/{proxy+}"
-  target             = "integrations/${aws_apigatewayv2_integration.user_service_int.id}"
+  route_key          = "ANY /api/v1/clients"
+  target             = "integrations/${aws_apigatewayv2_integration.clients_root_int.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
-resource "aws_apigatewayv2_route" "clients_root_route" {
+resource "aws_apigatewayv2_route" "clients_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/clients"
-  target             = "integrations/${aws_apigatewayv2_integration.user_service_int.id}"
+  route_key          = "ANY /api/v1/clients/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.clients_proxy_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+# Estilistas (User Service: 8082)
+resource "aws_apigatewayv2_route" "stylists_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/stylists"
+  target             = "integrations/${aws_apigatewayv2_integration.stylists_root_int.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
@@ -254,49 +312,41 @@ resource "aws_apigatewayv2_route" "clients_root_route" {
 resource "aws_apigatewayv2_route" "stylists_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
   route_key          = "ANY /api/v1/stylists/{proxy+}"
-  target             = "integrations/${aws_apigatewayv2_integration.user_service_int.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
-}
-
-resource "aws_apigatewayv2_route" "stylists_root_route" {
-  api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/stylists"
-  target             = "integrations/${aws_apigatewayv2_integration.user_service_int.id}"
+  target             = "integrations/${aws_apigatewayv2_integration.stylists_proxy_int.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
 # Citas y Agenda (Appointment Service: 8081)
-resource "aws_apigatewayv2_route" "appointments_route" {
+resource "aws_apigatewayv2_route" "appointments_root_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/appointments/{proxy+}"
-  target             = "integrations/${aws_apigatewayv2_integration.appointment_service_int.id}"
+  route_key          = "ANY /api/v1/appointments"
+  target             = "integrations/${aws_apigatewayv2_integration.appointments_root_int.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
-resource "aws_apigatewayv2_route" "appointments_root_route" {
+resource "aws_apigatewayv2_route" "appointments_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/appointments"
-  target             = "integrations/${aws_apigatewayv2_integration.appointment_service_int.id}"
+  route_key          = "ANY /api/v1/appointments/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.appointments_proxy_int.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
 # Notificaciones (Notification Service: 8083)
-resource "aws_apigatewayv2_route" "notifications_route" {
+resource "aws_apigatewayv2_route" "notifications_root_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/notifications/{proxy+}"
-  target             = "integrations/${aws_apigatewayv2_integration.notification_service_int.id}"
+  route_key          = "ANY /api/v1/notifications"
+  target             = "integrations/${aws_apigatewayv2_integration.notifications_root_int.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
-resource "aws_apigatewayv2_route" "notifications_root_route" {
+resource "aws_apigatewayv2_route" "notifications_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/notifications"
-  target             = "integrations/${aws_apigatewayv2_integration.notification_service_int.id}"
+  route_key          = "ANY /api/v1/notifications/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.notifications_proxy_int.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
