@@ -68,10 +68,10 @@ jobs:
 
 
   # ==========================================
-  # JOB 2: BUILD DOCKER, PUSH A ECR Y TERRAFORM
+  # JOB 2: TERRAFORM EC2 + DESPLIEGUE POR SSH
   # ==========================================
-  deploy-to-aws:
-    name: Build Docker & Deploy with Terraform
+  deploy-to-ec2:
+    name: Deploy to EC2
     runs-on: ubuntu-latest
     needs: build-and-test
 
@@ -86,11 +86,11 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build JAR with Maven
+      - name: Build JARs with Maven
         run: |
           cd elegance-backend-parent
           chmod +x ./mvnw
-          ./mvnw clean package -DskipTests -pl elegance-user-service -am
+          ./mvnw clean package -DskipTests
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -100,10 +100,6 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -112,61 +108,60 @@ jobs:
       - name: Terraform Init
         working-directory: ./infra/terraform
         run: terraform init
-      
-      - name: Terraform Destroy (Clean Slate)
+
+      - name: Terraform Apply (crea o mantiene la EC2)
         working-directory: ./infra/terraform
-        continue-on-error: true # Ignora errores si no hay nada que destruir aún
         env:
-          TF_VAR_ecr_user_service_uri: ${{ env.USER_SERVICE_IMAGE }}
-          TF_VAR_ecr_appointment_service_uri: ${{ env.APPOINTMENT_SERVICE_IMAGE }}
-          TF_VAR_ecr_notification_service_uri: ${{ env.NOTIFICATION_SERVICE_IMAGE }}
-          TF_VAR_db_url: ${{ vars.TEST_DB_URL }}
-          TF_VAR_db_username: ${{ vars.TEST_DB_USERNAME }}
           TF_VAR_db_password: ${{ secrets.TEST_DB_PASSWORD }}
-          TF_VAR_azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
-          TF_VAR_azure_client_id: ${{ vars.AZURE_CLIENT_ID }}
-          TF_VAR_azure_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
           TF_VAR_mail_username: ${{ secrets.MAIL_USERNAME }}
           TF_VAR_mail_password: ${{ secrets.MAIL_PASSWORD }}
-        run: terraform destroy -auto-approve
+        run: terraform apply -auto-approve
 
-
-      # Pasada 1: solo asegura que el repo ECR exista antes de pushear la imagen
-      - name: Terraform Apply - Ensure ECR Repository
+      - name: Get EC2 connection data from Terraform outputs
         working-directory: ./infra/terraform
-        env:
-          TF_VAR_db_url: ${{ vars.TEST_DB_URL }}
-          TF_VAR_db_username: ${{ vars.TEST_DB_USERNAME }}
-          TF_VAR_db_password: ${{ secrets.TEST_DB_PASSWORD }}
-          TF_VAR_azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
-          TF_VAR_azure_client_id: ${{ vars.AZURE_CLIENT_ID }}
-          TF_VAR_azure_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-        run: terraform apply -auto-approve -target=aws_ecr_repository.user_service
-
-      - name: Build, tag, and push User Service image to Amazon ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: elegance-user-service
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          cd elegance-backend-parent/elegance-user-service
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "EC2_HOST=$(terraform output -raw ec2_public_ip)" >> $GITHUB_ENV
+          terraform output -raw ec2_private_key_pem > /tmp/key.pem
+          chmod 600 /tmp/key.pem
 
-      # Pasada 2: aplica todo, ahora que la imagen ya existe en ECR
-      - name: Terraform Plan
-        working-directory: ./infra/terraform
+      - name: Wait for EC2 to be ready (Java + MySQL instalados)
+        run: |
+          for i in $(seq 1 40); do
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
+              'command -v java && systemctl is-active mysqld && test -d /opt/elegance' > /dev/null 2>&1; then
+              echo "✅ EC2 lista"
+              exit 0
+            fi
+            echo "Esperando instancia... ($i/40)"
+            sleep 15
+          done
+          echo "❌ La instancia no terminó de prepararse"
+          exit 1
+
+      - name: Create .env file with secrets
         env:
-          TF_VAR_ecr_user_service_uri: ${{ env.IMAGE_URI }}
-          TF_VAR_db_url: ${{ vars.TEST_DB_URL }}
-          TF_VAR_db_username: ${{ vars.TEST_DB_USERNAME }}
-          TF_VAR_db_password: ${{ secrets.TEST_DB_PASSWORD }}
-          TF_VAR_azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
-          TF_VAR_azure_client_id: ${{ vars.AZURE_CLIENT_ID }}
-          TF_VAR_azure_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-        run: terraform plan -out=tfplan
+          DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        run: |
+          printf 'DB_PASSWORD=%s\nMAIL_USERNAME=%s\nMAIL_PASSWORD=%s\n' \
+            "$DB_PASSWORD" "$MAIL_USERNAME" "$MAIL_PASSWORD" > /tmp/.env
 
-      - name: Terraform Apply
-        working-directory: ./infra/terraform
-        run: terraform apply -auto-approve tfplan
+      - name: Upload JARs, .env y restart.sh a la EC2
+        run: |
+          scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
+            elegance-backend-parent/elegance-user-service/target/elegance-user-service-*.jar \
+            ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-user-service.jar
+          scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
+            elegance-backend-parent/elegance-appointment-service/target/elegance-appointment-service-*.jar \
+            ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-appointment-service.jar
+          scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
+            elegance-backend-parent/elegance-notification-service/target/elegance-notification-service-*.jar \
+            ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-notification-service.jar
+          scp -o StrictHostKeyChecking=no -i /tmp/key.pem /tmp/.env ec2-user@${{ env.EC2_HOST }}:/opt/elegance/.env
+          scp -o StrictHostKeyChecking=no -i /tmp/key.pem scripts/restart.sh ec2-user@${{ env.EC2_HOST }}:/opt/elegance/restart.sh
+
+      - name: Restart services
+        run: |
+          ssh -o StrictHostKeyChecking=no -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
+            'chmod 600 /opt/elegance/.env && bash /opt/elegance/restart.sh'

@@ -4,106 +4,57 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
-  # NOTA: Para CI/CD real, descomenta y configura un backend S3 para guardar el estado
-  # backend "s3" {
-  #   bucket         = "tu-bucket-de-terraform-state"
-  #   key            = "elegance/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   encrypt        = true
-  # }
+
+  backend "s3" {
+    bucket         = "elegance-tf-state-2026-gabriel" # Tu bucket real
+    key            = "elegance/ec2/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "elegance-tf-lock"
+  }
 }
 
 provider "aws" {
   region = var.aws_region
 }
 
-# 0. Repositorio ECR para la imagen de User Service
-resource "aws_ecr_repository" "user_service" {
-  name                 = "${var.app_name}-user-service"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  # Permite hacer 'terraform destroy' aunque el repo tenga imágenes dentro
-  # (útil en AWS Academy, donde vas a recrear todo seguido)
-  force_delete = true
+# ==========================================
+# LLAVE SSH (generada por Terraform)
+# ==========================================
+resource "tls_private_key" "ec2_key" {
+  algorithm = "RSA"
+  size      = 4096
 }
 
-# 1. Usar la VPC y Subnets por defecto de AWS (para mantenerlo mínimo)
-data "aws_vpc" "default" {
-  default = true
+resource "aws_key_pair" "elegance_key" {
+  key_name   = "${var.app_name}-key"
+  public_key = tls_private_key.ec2_key.public_key_openssh
 }
 
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
-# 2. Cluster ECS
-resource "aws_ecs_cluster" "main" {
-  name = "${var.app_name}-cluster"
-}
-
-# 3. Rol de ejecución para ECS — AWS Academy no permite crear roles,
-# así que usamos el LabRole que Academy ya provee
-data "aws_iam_role" "lab_role" {
-  name = "LabRole"
-}
-
-# 4. Definición de la Tarea (Task Definition)
-resource "aws_ecs_task_definition" "user_service" {
-  family                   = "${var.app_name}-user-service"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
-  memory                   = "1024"
-  execution_role_arn       = data.aws_iam_role.lab_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name  = "user-service"
-      image = var.ecr_user_service_uri
-      portMappings = [
-        {
-          containerPort = 8082
-          hostPort      = 8082
-        }
-      ]
-      environment = [
-        { name = "SPRING_DATASOURCE_URL", value = var.db_url },
-        { name = "SPRING_DATASOURCE_USERNAME", value = var.db_username },
-        { name = "SPRING_DATASOURCE_PASSWORD", value = var.db_password },
-        { name = "AZURE_TENANT_ID", value = var.azure_tenant_id },
-        { name = "AZURE_CLIENT_ID", value = var.azure_client_id },
-        { name = "AZURE_CLIENT_SECRET", value = var.azure_client_secret }
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/${var.app_name}-user-service"
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
-    }
-  ])
-}
-
-# 5. Grupo de Seguridad para el Servicio
-resource "aws_security_group" "ecs_service" {
-  name   = "${var.app_name}-ecs-sg"
-  vpc_id = data.aws_vpc.default.id
+# ==========================================
+# SECURITY GROUP (SSH + puertos de los microservicios)
+# ==========================================
+resource "aws_security_group" "elegance_sg" {
+  name        = "${var.app_name}-ec2-sg"
+  description = "Permite SSH y puertos 8081-8083"
 
   ingress {
-    from_port   = 8082
-    to_port     = 8082
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # En prod, restringir al ALB
+    cidr_blocks = ["0.0.0.0/0"] # En prod, restringe a tu IP
+  }
+
+  ingress {
+    from_port   = 8081
+    to_port     = 8083
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -114,17 +65,47 @@ resource "aws_security_group" "ecs_service" {
   }
 }
 
-# 6. Servicio ECS
-resource "aws_ecs_service" "user_service" {
-  name            = "${var.app_name}-user-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.user_service.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
+# ==========================================
+# AMI Amazon Linux 2023
+# ==========================================
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
 
-  network_configuration {
-    subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.ecs_service.id]
-    assign_public_ip = true # Necesario si usas la VPC por defecto sin NAT Gateway
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# ==========================================
+# INSTANCIA EC2 (Java 17 + MySQL instalados al arrancar)
+# ==========================================
+resource "aws_instance" "elegance_ec2" {
+  ami             = data.aws_ami.amazon_linux.id
+  instance_type   = var.instance_type
+  key_name        = aws_key_pair.elegance_key.key_name
+  security_groups = [aws_security_group.elegance_sg.name]
+
+  user_data = <<-EOF
+    #!/bin/bash
+    set -ex
+    dnf update -y
+    dnf install -y java-17-amazon-corretto mysql-server
+    systemctl enable --now mysqld
+    sleep 10
+    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '${var.db_password}'; FLUSH PRIVILEGES;"
+    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_users; CREATE DATABASE IF NOT EXISTS elegance_appointments;"
+    mkdir -p /opt/elegance
+    chown -R ec2-user:ec2-user /opt/elegance
+  EOF
+
+  tags = {
+    Name = "${var.app_name}-ec2"
   }
 }

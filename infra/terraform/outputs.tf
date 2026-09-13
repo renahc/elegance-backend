@@ -1,15 +1,15 @@
-output "ecs_cluster_name" {
-  value = aws_ecs_cluster.main.name
+output "ec2_public_ip" {
+  description = "IP pública de la instancia EC2"
+  value       = aws_instance.elegance_ec2.public_ip
 }
 
-output "user_service_security_group_id" {
-  value = aws_security_group.ecs_service.id
+output "ec2_username" {
+  description = "Usuario SSH de Amazon Linux 2023"
+  value       = "ec2-user"
 }
 
-output "ecr_repository_url" {
-  value = aws_ecr_repository.user_service.repository_url
-}
-
-output "ecr_repository_name" {
-  value = aws_ecr_repository.user_service.name
+output "ec2_private_key_pem" {
+  description = "Llave privada SSH (solo para el pipeline)"
+  value       = tls_private_key.ec2_key.private_key_pem
+  sensitive   = true
 }
