@@ -64,16 +64,30 @@ jobs:
 
       - name: Wait for EC2 to be ready (Java + MySQL instalados)
         run: |
+          echo "⏳ Esperando inicialización de la instancia EC2 (${{ env.EC2_HOST }})..."
           for i in $(seq 1 40); do
-            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
-              'command -v java && (systemctl is-active mysqld || systemctl is-active mariadb) && test -d /opt/elegance' > /dev/null 2>&1; then
-              echo "✅ EC2 lista"
-              exit 0
+            STATUS=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
+              'cat /opt/elegance/status.txt 2>/dev/null || echo "CONNECTING"' 2>/dev/null || echo "NO_SSH")
+
+            if [ "$STATUS" = "READY" ]; then
+              if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
+                'command -v java && (systemctl is-active mysqld || systemctl is-active mariadb)' > /dev/null 2>&1; then
+                echo "✅ EC2 lista y completamente aprovisionada ($i/40)."
+                exit 0
+              fi
             fi
-            echo "Esperando instancia... ($i/40)"
-            sleep 15
+
+            if [ "$STATUS" = "NO_SSH" ]; then
+              echo "[$i/40] 🔌 Esperando conexión SSH con la instancia..."
+            elif [ "$STATUS" = "BOOTING" ] || [ "$STATUS" = "CONNECTING" ]; then
+              echo "[$i/40] ⚙️ SSH conectado. Instalando Java 17 y MariaDB..."
+            else
+              echo "[$i/40] ⏳ Estado: $STATUS. Verificando servicios..."
+            fi
+
+            sleep 10
           done
-          echo "❌ La instancia no terminó de prepararse"
+          echo "❌ La instancia no terminó de prepararse en el tiempo esperado"
           echo "=== Diagnóstico de inicio (user-data / cloud-init) ==="
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
             'cat /var/log/user-data.log 2>/dev/null || cat /var/log/cloud-init-output.log 2>/dev/null' || true

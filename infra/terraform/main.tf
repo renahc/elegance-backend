@@ -94,10 +94,13 @@ resource "aws_instance" "elegance_ec2" {
   user_data = <<-EOF
     #!/bin/bash
     set -ex
+    mkdir -p /opt/elegance
+    chown -R ec2-user:ec2-user /opt/elegance
+    echo "BOOTING" > /opt/elegance/status.txt
+
     exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "=== Iniciando instalación de dependencias en AL2023 ==="
-    dnf update -y
+    echo "=== Instalando Java 17 y MariaDB en AL2023 ==="
     dnf install -y java-17-amazon-corretto mariadb105-server
     
     echo "=== Iniciando y habilitando servicio MariaDB ==="
@@ -108,14 +111,205 @@ resource "aws_instance" "elegance_ec2" {
     mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${var.db_password}'; FLUSH PRIVILEGES;"
     mysql -u root -p'${var.db_password}' -e "CREATE DATABASE IF NOT EXISTS elegance_users; CREATE DATABASE IF NOT EXISTS elegance_appointments;"
     
-    echo "=== Creando directorio de la aplicación ==="
-    mkdir -p /opt/elegance
-    chown -R ec2-user:ec2-user /opt/elegance
     echo "READY" > /opt/elegance/status.txt
     echo "=== user_data completado exitosamente ==="
   EOF
 
   tags = {
     Name = "${var.app_name}-ec2"
+  }
+}
+
+# ==========================================
+# COGNITO USER POOL & CLIENT
+# ==========================================
+resource "aws_cognito_user_pool" "elegance_pool" {
+  name                     = "${var.app_name}-user-pool"
+  username_attributes      = ["email"]
+  auto_verified_attributes = ["email"]
+
+  password_policy {
+    minimum_length    = 8
+    require_lowercase = true
+    require_numbers   = true
+    require_symbols   = false
+    require_uppercase = true
+  }
+
+  account_recovery_setting {
+    recovery_mechanism {
+      name     = "verified_email"
+      priority = 1
+    }
+  }
+
+  admin_create_user_config {
+    allow_admin_create_user_only = false
+  }
+
+  tags = {
+    Name = "${var.app_name}-cognito-pool"
+  }
+}
+
+resource "aws_cognito_user_pool_client" "elegance_client" {
+  name         = "${var.app_name}-app-client"
+  user_pool_id = aws_cognito_user_pool.elegance_pool.id
+
+  generate_secret = false
+
+  explicit_auth_flows = [
+    "ALLOW_USER_PASSWORD_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+    "ALLOW_USER_SRP_AUTH"
+  ]
+
+  prevent_user_existence_errors = "ENABLED"
+}
+
+# ==========================================
+# API GATEWAY (HTTP API v2)
+# ==========================================
+resource "aws_apigatewayv2_api" "elegance_api" {
+  name          = "${var.app_name}-http-api"
+  protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_origins = ["*"]
+    allow_methods = ["*"]
+    allow_headers = ["*"]
+    max_age       = 300
+  }
+
+  tags = {
+    Name = "${var.app_name}-api-gateway"
+  }
+}
+
+# ==========================================
+# COGNITO JWT AUTHORIZER
+# ==========================================
+resource "aws_apigatewayv2_authorizer" "cognito_auth" {
+  api_id           = aws_apigatewayv2_api.elegance_api.id
+  authorizer_type  = "JWT"
+  identity_sources = ["$request.header.Authorization"]
+  name             = "${var.app_name}-cognito-authorizer"
+
+  jwt_configuration {
+    audience = [aws_cognito_user_pool_client.elegance_client.id]
+    issuer   = "https://${aws_cognito_user_pool.elegance_pool.endpoint}"
+  }
+}
+
+# ==========================================
+# INTEGRACIONES HTTP PROXY HACIA EC2
+# ==========================================
+resource "aws_apigatewayv2_integration" "user_service_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/{proxy}"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+}
+
+resource "aws_apigatewayv2_integration" "appointment_service_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/{proxy}"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+}
+
+resource "aws_apigatewayv2_integration" "notification_service_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8083/{proxy}"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+}
+
+# ==========================================
+# RUTAS DE API GATEWAY (PROTEGIDAS CON COGNITO)
+# ==========================================
+# Clientes y Estilistas (User Service: 8082)
+resource "aws_apigatewayv2_route" "clients_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/clients/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.user_service_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+resource "aws_apigatewayv2_route" "clients_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/clients"
+  target             = "integrations/${aws_apigatewayv2_integration.user_service_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+resource "aws_apigatewayv2_route" "stylists_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/stylists/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.user_service_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+resource "aws_apigatewayv2_route" "stylists_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/stylists"
+  target             = "integrations/${aws_apigatewayv2_integration.user_service_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+# Citas y Agenda (Appointment Service: 8081)
+resource "aws_apigatewayv2_route" "appointments_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/appointments/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.appointment_service_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+resource "aws_apigatewayv2_route" "appointments_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/appointments"
+  target             = "integrations/${aws_apigatewayv2_integration.appointment_service_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+# Notificaciones (Notification Service: 8083)
+resource "aws_apigatewayv2_route" "notifications_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/notifications/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.notification_service_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+resource "aws_apigatewayv2_route" "notifications_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/notifications"
+  target             = "integrations/${aws_apigatewayv2_integration.notification_service_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+}
+
+# ==========================================
+# STAGE DEPLOYMENT
+# ==========================================
+resource "aws_apigatewayv2_stage" "default" {
+  api_id      = aws_apigatewayv2_api.elegance_api.id
+  name        = "$default"
+  auto_deploy = true
+
+  tags = {
+    Name = "${var.app_name}-default-stage"
   }
 }
