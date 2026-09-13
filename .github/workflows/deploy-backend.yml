@@ -16,7 +16,7 @@ jobs:
     name: Build & Test Backend
     runs-on: ubuntu-latest
     
-    # 🌟 AQUÍ ESTÁ LA MAGIA: Levanta un MySQL temporal para los tests
+    # 🌟 MySQL temporal para los tests
     services:
       mysql:
         image: mysql:8.0
@@ -42,12 +42,12 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      # ✅ CORREGIDO: Apunta al mvnw dentro de la carpeta del proyecto padre
       - name: Make mvnw executable
-        run: chmod +x ./mvnw
+        run: chmod +x ./elegance-backend-parent/mvnw
 
       - name: Build and Run Tests
         env:
-          # Inyectamos las variables y secretos en el entorno de Spring Boot
           SPRING_DATASOURCE_URL: ${{ vars.TEST_DB_URL }}
           SPRING_DATASOURCE_USERNAME: ${{ vars.TEST_DB_USERNAME }}
           SPRING_DATASOURCE_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
@@ -59,7 +59,8 @@ jobs:
           SPRING_MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
           SPRING_MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
         
+        # ✅ CORREGIDO: Ejecuta el mvnw desde la carpeta correcta
         run: |
           echo "🚀 Iniciando pruebas de integración con base de datos temporal..."
-          # clean verify compila y ejecuta todos los tests. Si uno falla, el job falla.
+          cd elegance-backend-parent
           ./mvnw clean verify -DskipTests=false
