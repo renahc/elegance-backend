@@ -1,5 +1,6 @@
 package com.elegance.notification.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -16,8 +17,11 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final String issuerUri = "https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/";
-    private final String audience = "api://304d54f7-d485-478a-a1ea-0c2f874b0c1f";
+    @Value("${azure.activedirectory.issuer-uri:https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}")
+    private String issuerUri;
+    
+    @Value("${azure.activedirectory.client-id:api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}")
+    private String audience;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

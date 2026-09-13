@@ -94,14 +94,25 @@ resource "aws_instance" "elegance_ec2" {
   user_data = <<-EOF
     #!/bin/bash
     set -ex
+    exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
+
+    echo "=== Iniciando instalación de dependencias en AL2023 ==="
     dnf update -y
-    dnf install -y java-17-amazon-corretto mysql-server
-    systemctl enable --now mysqld
-    sleep 10
-    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '${var.db_password}'; FLUSH PRIVILEGES;"
-    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_users; CREATE DATABASE IF NOT EXISTS elegance_appointments;"
+    dnf install -y java-17-amazon-corretto mariadb105-server
+    
+    echo "=== Iniciando y habilitando servicio MariaDB ==="
+    systemctl enable --now mariadb
+    sleep 5
+    
+    echo "=== Configurando usuario root y bases de datos ==="
+    mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${var.db_password}'; FLUSH PRIVILEGES;"
+    mysql -u root -p'${var.db_password}' -e "CREATE DATABASE IF NOT EXISTS elegance_users; CREATE DATABASE IF NOT EXISTS elegance_appointments;"
+    
+    echo "=== Creando directorio de la aplicación ==="
     mkdir -p /opt/elegance
     chown -R ec2-user:ec2-user /opt/elegance
+    echo "READY" > /opt/elegance/status.txt
+    echo "=== user_data completado exitosamente ==="
   EOF
 
   tags = {

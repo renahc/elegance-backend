@@ -66,7 +66,7 @@ jobs:
         run: |
           for i in $(seq 1 40); do
             if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
-              'command -v java && systemctl is-active mysqld && test -d /opt/elegance' > /dev/null 2>&1; then
+              'command -v java && (systemctl is-active mysqld || systemctl is-active mariadb) && test -d /opt/elegance' > /dev/null 2>&1; then
               echo "✅ EC2 lista"
               exit 0
             fi
@@ -74,6 +74,9 @@ jobs:
             sleep 15
           done
           echo "❌ La instancia no terminó de prepararse"
+          echo "=== Diagnóstico de inicio (user-data / cloud-init) ==="
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
+            'cat /var/log/user-data.log 2>/dev/null || cat /var/log/cloud-init-output.log 2>/dev/null' || true
           exit 1
 
       - name: Create .env file with secrets
@@ -81,9 +84,11 @@ jobs:
           DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
           MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
           MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          AZURE_AD_ISSUER_URI: ${{ secrets.AZURE_AD_ISSUER_URI }}
+          AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
         run: |
-          printf 'DB_PASSWORD=%s\nMAIL_USERNAME=%s\nMAIL_PASSWORD=%s\n' \
-            "$DB_PASSWORD" "$MAIL_USERNAME" "$MAIL_PASSWORD" > /tmp/.env
+          printf 'DB_PASSWORD=%s\nMAIL_USERNAME=%s\nMAIL_PASSWORD=%s\nAZURE_AD_ISSUER_URI=%s\nAZURE_AD_CLIENT_ID=%s\n' \
+            "$DB_PASSWORD" "$MAIL_USERNAME" "$MAIL_PASSWORD" "$AZURE_AD_ISSUER_URI" "$AZURE_AD_CLIENT_ID" > /tmp/.env
 
       - name: Upload JARs, .env y restart.sh a la EC2
         run: |
@@ -97,7 +102,11 @@ jobs:
             elegance-backend-parent/elegance-notification-service/target/elegance-notification-service-*.jar \
             ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-notification-service.jar
           scp -o StrictHostKeyChecking=no -i /tmp/key.pem /tmp/.env ec2-user@${{ env.EC2_HOST }}:/opt/elegance/.env
-          scp -o StrictHostKeyChecking=no -i /tmp/key.pem scripts/restart.sh ec2-user@${{ env.EC2_HOST }}:/opt/elegance/restart.sh
+          if [ -f infra/terraform/scripts/restart.sh ]; then
+            scp -o StrictHostKeyChecking=no -i /tmp/key.pem infra/terraform/scripts/restart.sh ec2-user@${{ env.EC2_HOST }}:/opt/elegance/restart.sh
+          elif [ -f scripts/restart.sh ]; then
+            scp -o StrictHostKeyChecking=no -i /tmp/key.pem scripts/restart.sh ec2-user@${{ env.EC2_HOST }}:/opt/elegance/restart.sh
+          fi
 
       - name: Restart services
         run: |
