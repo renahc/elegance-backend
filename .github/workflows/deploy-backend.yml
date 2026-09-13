@@ -1,4 +1,4 @@
-name: Deploy Backend (Spring Boot) to AWS EC2
+name: Deploy Microservices to AWS
 
 on:
   push:
@@ -7,79 +7,35 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
+    
+    defaults:
+      run:
+        working-directory: ./elegance-backend-parent  # ← CLAVE
+    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
           java-version: '17'
-          cache: 'maven'
-
-      - name: Build Spring Boot JAR Package
-        run: mvn clean package -DskipTests
-
-      - name: Prepare staging directory via SSH
-        uses: appleboy/ssh-action@v1.0.3
+          distribution: 'temurin'
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.AWS_EC2_HOST }}
-          username: ${{ secrets.AWS_EC2_USERNAME }}
-          key: ${{ secrets.AWS_EC2_SSH_KEY }}
-          script: |
-            mkdir -p /home/ubuntu/backend-build
-            rm -rf /home/ubuntu/backend-build/*
-
-      - name: Deploy JAR file to EC2 home folder via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.AWS_EC2_HOST }}
-          username: ${{ secrets.AWS_EC2_USERNAME }}
-          key: ${{ secrets.AWS_EC2_SSH_KEY }}
-          source: "target/salon-backend.jar"
-          target: "/home/ubuntu/backend-build"
-          strip_components: 1
-          rm: false
-
-      - name: Deploy JAR and Setup Spring Boot Service via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.AWS_EC2_HOST }}
-          username: ${{ secrets.AWS_EC2_USERNAME }}
-          key: ${{ secrets.AWS_EC2_SSH_KEY }}
-          script: |
-            # Install Java 17 JRE if missing
-            which java || (sudo apt-get update -y && sudo apt-get install -y openjdk-17-jre-headless)
-
-            # Copy JAR to /opt/salon-backend
-            sudo mkdir -p /opt/salon-backend
-            sudo cp /home/ubuntu/backend-build/salon-backend.jar /opt/salon-backend/app.jar
-            sudo chown -R ubuntu:ubuntu /opt/salon-backend
-
-            # Create systemd service unit if missing
-            sudo tee /etc/systemd/system/salon-backend.service > /dev/null << 'EOF'
-            [Unit]
-            Description=Élégance Salon Spring Boot Backend REST API Service
-            After=syslog.target network.target
-
-            [Service]
-            User=ubuntu
-            WorkingDirectory=/opt/salon-backend
-            ExecStart=/usr/bin/java -jar /opt/salon-backend/app.jar
-            SuccessExitStatus=143
-            TimeoutStopSec=20
-            Restart=always
-            RestartSec=5
-
-            [Install]
-            WantedBy=multi-user.target
-            EOF
-
-            sudo systemctl daemon-reload
-            sudo systemctl enable salon-backend
-            sudo systemctl restart salon-backend || true
-            sudo systemctl status salon-backend --no-pager || true
-
-
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build Appointment Service
+        run: |
+          mvn clean package -DskipTests -pl elegance-appointment-service -am
+          docker build -t ${{ secrets.ECR_REGISTRY }}/appointment-service:${{ github.sha }} \
+            elegance-appointment-service/
+          docker push ${{ secrets.ECR_REGISTRY }}/appointment-service:${{ github.sha }}

@@ -1,0 +1,81 @@
+package com.elegance.user.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    // ⚠️ CAMBIO CLAVE: Usamos el issuer real que muestra tu token decodificado
+    private final String issuerUri = "https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/";
+    
+    // Este coincide perfectamente con el "aud" de tu token
+    private final String audience = "api://304d54f7-d485-478a-a1ea-0c2f874b0c1f";
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                // Rutas públicas
+                .requestMatchers(
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/v3/api-docs/**",
+                    "/actuator/health"
+                ).permitAll()
+                // Todas las demás requieren token válido
+                .anyRequest().authenticated()
+            )
+            // Configuramos el decodificador JWT personalizado
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder())));
+
+        return http.build();
+    }
+
+    @Bean
+    public JwtDecoder jwtDecoder() {
+        // Decodificador base que valida la firma y el emisor (issuer)
+        NimbusJwtDecoder jwtDecoder = (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(issuerUri);
+        
+        // Validador de emisor
+        OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuerUri);
+        
+        // Validador personalizado de audiencia (audience)
+        OAuth2TokenValidator<Jwt> withAudience = new AudienceValidator(audience);
+        
+        // Combinamos ambos validadores
+        jwtDecoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(withIssuer, withAudience));
+        
+        return jwtDecoder;
+    }
+
+    // Clase interna para validar que el token esté dirigido a nuestra API
+    static class AudienceValidator implements OAuth2TokenValidator<Jwt> {
+        private final String audience;
+        
+        public AudienceValidator(String audience) {
+            this.audience = audience;
+        }
+        
+        @Override
+        public OAuth2TokenValidatorResult validate(Jwt jwt) {
+            OAuth2Error error = new OAuth2Error("invalid_token", "The required audience is missing", null);
+            if (jwt.getAudience().contains(audience)) {
+                return OAuth2TokenValidatorResult.success();
+            }
+            return OAuth2TokenValidatorResult.failure(error);
+        }
+    }
+}
