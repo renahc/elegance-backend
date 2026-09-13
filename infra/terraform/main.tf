@@ -28,7 +28,6 @@ provider "aws" {
 # ==========================================
 resource "tls_private_key" "ec2_key" {
   algorithm = "RSA"
-  size      = 4096
 }
 
 resource "aws_key_pair" "elegance_key" {
