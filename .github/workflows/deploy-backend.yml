@@ -3,10 +3,10 @@ name: Elegance Backend CI/CD
 on:
   push:
     branches:
-      - 'Develop/Microservicios'
+      - 'Develop/Backend'
   pull_request:
     branches:
-      - 'Develop/Microservicios'
+      - 'Develop/Backend'
 
 jobs:
   # ==========================================
@@ -16,6 +16,21 @@ jobs:
     name: Build & Test Backend
     runs-on: ubuntu-latest
     
+    # 🌟 AQUÍ ESTÁ LA MAGIA: Levanta un MySQL temporal para los tests
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          MYSQL_DATABASE: elegance_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -30,56 +45,21 @@ jobs:
       - name: Make mvnw executable
         run: chmod +x ./mvnw
 
-      - name: Build and Run Tests with Secrets
+      - name: Build and Run Tests
         env:
-          # Inyectamos los secretos como variables de entorno para los tests de integración
-          TEST_DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
-          TEST_AZURE_CLIENT_SECRET: ${{ secrets.TEST_AZURE_CLIENT_SECRET }}
+          # Inyectamos las variables y secretos en el entorno de Spring Boot
+          SPRING_DATASOURCE_URL: ${{ vars.TEST_DB_URL }}
+          SPRING_DATASOURCE_USERNAME: ${{ vars.TEST_DB_USERNAME }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          
+          SPRING_MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          SPRING_MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        
         run: |
-          # Ejecutamos clean verify. Si algún test falla, el pipeline se detiene aquí.
-          ./mvnw clean verify \
-            -Dspring.datasource.password=${{ secrets.TEST_DB_PASSWORD }} \
-            -Dtest.azure.client-secret=${{ secrets.TEST_AZURE_CLIENT_SECRET }}
-
-      - name: Upload Test Reports (Opcional, para depuración)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: '**/target/surefire-reports/'
-
-  # ==========================================
-  # JOB 2: DESPLIEGUE EN AWS CON TERRAFORM (CD)
-  # ==========================================
-  deploy-to-aws:
-    name: Deploy to AWS via Terraform
-    runs-on: ubuntu-latest
-    needs: build-and-test # ⚠️ ESTO ES CLAVE: Solo se ejecuta si el Job 1 fue EXITOSO
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1 # Cambia a tu región de AWS
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-
-      - name: Terraform Init
-        working-directory: ./infrastructure # Asume que tu código TF está aquí
-        run: terraform init
-
-      - name: Terraform Plan
-        working-directory: ./infrastructure
-        run: terraform plan -out=tfplan
-
-      - name: Terraform Apply
-        working-directory: ./infrastructure
-        run: terraform apply -auto-approve tfplan
+          echo "🚀 Iniciando pruebas de integración con base de datos temporal..."
+          # clean verify compila y ejecuta todos los tests. Si uno falla, el job falla.
+          ./mvnw clean verify -DskipTests=false
