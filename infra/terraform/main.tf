@@ -18,6 +18,20 @@ provider "aws" {
   region = var.aws_region
 }
 
+# 0. Repositorio ECR para la imagen de User Service
+resource "aws_ecr_repository" "user_service" {
+  name                 = "${var.app_name}-user-service"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  # Permite hacer 'terraform destroy' aunque el repo tenga imágenes dentro
+  # (útil en AWS Academy, donde vas a recrear todo seguido)
+  force_delete = true
+}
+
 # 1. Usar la VPC y Subnets por defecto de AWS (para mantenerlo mínimo)
 data "aws_vpc" "default" {
   default = true
@@ -80,12 +94,10 @@ resource "aws_ecs_task_definition" "user_service" {
       environment = [
         { name = "SPRING_DATASOURCE_URL", value = var.db_url },
         { name = "SPRING_DATASOURCE_USERNAME", value = var.db_username },
+        { name = "SPRING_DATASOURCE_PASSWORD", value = var.db_password },
         { name = "AZURE_TENANT_ID", value = var.azure_tenant_id },
-        { name = "AZURE_CLIENT_ID", value = var.azure_client_id }
-      ]
-      secrets = [
-        { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = var.db_password }, # En prod, usa AWS Secrets Manager
-        { name = "AZURE_CLIENT_SECRET", valueFrom = var.azure_client_secret }
+        { name = "AZURE_CLIENT_ID", value = var.azure_client_id },
+        { name = "AZURE_CLIENT_SECRET", value = var.azure_client_secret }
       ]
       logConfiguration = {
         logDriver = "awslogs"

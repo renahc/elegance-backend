@@ -11,8 +11,9 @@ variable "app_name" {
 }
 
 variable "ecr_user_service_uri" {
-  description = "URI de la imagen de User Service en ECR"
+  description = "URI de la imagen de User Service en ECR (repo:tag)"
   type        = string
+  default     = "" # vacío en el apply que solo crea el repo ECR; se pasa real en el apply final
 }
 
 variable "db_url" {
