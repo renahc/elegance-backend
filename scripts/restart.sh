@@ -20,6 +20,8 @@ if [ -n "$JAVA_HOME" ]; then
   export PATH="$JAVA_HOME/bin:$PATH"
 fi
 
+cd /opt/elegance
+
 nohup java -Xmx256m -jar -Dserver.port=8082 \
   -Dspring.datasource.url="jdbc:mysql://localhost:3306/elegance_users?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
   -Dspring.datasource.username=root \
