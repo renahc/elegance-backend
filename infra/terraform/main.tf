@@ -120,16 +120,19 @@ resource "aws_instance" "elegance_ec2" {
     yum localinstall -y /tmp/corretto17.rpm 2>&1 | tail -5
     rm -f /tmp/corretto17.rpm
     
-    # Crear bases de datos para los microservicios
-    echo "[$(date)] Configurando bases de datos iniciales..."
-    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_users;" || true
-    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_appointments;" || true
-    mysql -e "CREATE DATABASE IF NOT EXISTS elegancebd;" || true
+    # Configurar autenticación y contraseñas de MariaDB para acceso JDBC
+    echo "[$(date)] Configurando autenticación y bases de datos en MariaDB..."
+    mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegance_users;" || true
+    mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegance_appointments;" || true
+    mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegancebd;" || true
     
-    if [ -n "${var.db_password}" ]; then
-      mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${var.db_password}'; FLUSH PRIVILEGES;" 2>/dev/null || \
-      mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('${var.db_password}'); FLUSH PRIVILEGES;" 2>/dev/null || \
-      mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY '${var.db_password}'; FLUSH PRIVILEGES;" 2>/dev/null || true
+    DB_PASS="${var.db_password}"
+    if [ -n "$DB_PASS" ]; then
+      mysql -u root -e "UPDATE mysql.user SET plugin = 'mysql_native_password', password = PASSWORD('$DB_PASS') WHERE User = 'root';" 2>/dev/null || true
+      mysql -u root -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY '$DB_PASS' WITH GRANT OPTION;" 2>/dev/null || true
+      mysql -u root -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' IDENTIFIED BY '$DB_PASS' WITH GRANT OPTION;" 2>/dev/null || true
+      mysql -u root -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY '$DB_PASS' WITH GRANT OPTION;" 2>/dev/null || true
+      mysql -u root -p"$DB_PASS" -e "FLUSH PRIVILEGES;" 2>/dev/null || mysql -u root -e "FLUSH PRIVILEGES;" 2>/dev/null || true
     fi
     
     # Asegurar permisos del directorio de la aplicación
