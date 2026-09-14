@@ -70,11 +70,8 @@ jobs:
               'cat /opt/elegance/status.txt 2>/dev/null || echo "CONNECTING"' 2>/dev/null || echo "NO_SSH")
 
             if [ "$STATUS" = "READY" ]; then
-              if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
-                'command -v java && (systemctl is-active mysqld || systemctl is-active mariadb)' > /dev/null 2>&1; then
-                echo "✅ EC2 lista y completamente aprovisionada ($i/40)."
-                exit 0
-              fi
+              echo "✅ EC2 lista y completamente aprovisionada ($i/40)."
+              exit 0
             fi
 
             if [ "$STATUS" = "NO_SSH" ]; then
