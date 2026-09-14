@@ -83,7 +83,7 @@ data "aws_ami" "amazon_linux" {
 }
 
 # ==========================================
-# INSTANCIA EC2 (Java 17 + MySQL instalados al arrancar)
+# INSTANCIA EC2 (Java 17 + MariaDB instalados al arrancar)
 # ==========================================
 resource "aws_instance" "elegance_ec2" {
   ami             = data.aws_ami.amazon_linux.id
@@ -100,6 +100,9 @@ resource "aws_instance" "elegance_ec2" {
 
     exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
 
+    echo "=== Actualizando dnf metadata ==="
+    dnf update -y --refresh
+    
     echo "=== Instalando Java 17 y MariaDB en AL2023 ==="
     dnf install -y java-17-amazon-corretto mariadb105-server
     
@@ -201,7 +204,6 @@ resource "aws_apigatewayv2_authorizer" "cognito_auth" {
   }
 }
 
-
 resource "null_resource" "wait_for_ec2" {
   provisioner "remote-exec" {
     inline = ["echo 'EC2 is ready'"]
@@ -218,7 +220,6 @@ resource "null_resource" "wait_for_ec2" {
   depends_on = [aws_instance.elegance_ec2]
 }
 
-
 # ==========================================
 # INTEGRACIONES HTTP PROXY HACIA EC2
 # ==========================================
@@ -230,6 +231,8 @@ resource "aws_apigatewayv2_integration" "clients_root_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
+
+  depends_on = [null_resource.wait_for_ec2]
 }
 
 resource "aws_apigatewayv2_integration" "clients_proxy_int" {
@@ -239,6 +242,8 @@ resource "aws_apigatewayv2_integration" "clients_proxy_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
+
+  depends_on = [null_resource.wait_for_ec2]
 }
 
 # User Service (Puerto 8082): Estilistas
@@ -249,6 +254,8 @@ resource "aws_apigatewayv2_integration" "stylists_root_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
+
+  depends_on = [null_resource.wait_for_ec2]
 }
 
 resource "aws_apigatewayv2_integration" "stylists_proxy_int" {
@@ -258,6 +265,8 @@ resource "aws_apigatewayv2_integration" "stylists_proxy_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
+
+  depends_on = [null_resource.wait_for_ec2]
 }
 
 # Appointment Service (Puerto 8081): Citas
@@ -268,6 +277,8 @@ resource "aws_apigatewayv2_integration" "appointments_root_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
+
+  depends_on = [null_resource.wait_for_ec2]
 }
 
 resource "aws_apigatewayv2_integration" "appointments_proxy_int" {
@@ -277,6 +288,8 @@ resource "aws_apigatewayv2_integration" "appointments_proxy_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
+
+  depends_on = [null_resource.wait_for_ec2]
 }
 
 # Notification Service (Puerto 8083): Notificaciones
@@ -287,6 +300,8 @@ resource "aws_apigatewayv2_integration" "notifications_root_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
+
+  depends_on = [null_resource.wait_for_ec2]
 }
 
 resource "aws_apigatewayv2_integration" "notifications_proxy_int" {
@@ -296,38 +311,10 @@ resource "aws_apigatewayv2_integration" "notifications_proxy_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
-}
-resource "aws_apigatewayv2_integration" "user_service_int" {
-  api_id                 = aws_apigatewayv2_api.elegance_api.id
-  integration_type       = "HTTP_PROXY"
-  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/%7Bproxy%7D"
-  integration_method     = "ANY"
-  connection_type        = "INTERNET"
-  payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
-}
-resource "aws_apigatewayv2_integration" "appointment_service_int" {
-  api_id                 = aws_apigatewayv2_api.elegance_api.id
-  integration_type       = "HTTP_PROXY"
-  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/%7Bproxy%7D"
-  integration_method     = "ANY"
-  connection_type        = "INTERNET"
-  payload_format_version = "1.0"
 
   depends_on = [null_resource.wait_for_ec2]
 }
 
-resource "aws_apigatewayv2_integration" "notification_service_int" {
-  api_id                 = aws_apigatewayv2_api.elegance_api.id
-  integration_type       = "HTTP_PROXY"
-  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8083/%7Bproxy%7D"
-  integration_method     = "ANY"
-  connection_type        = "INTERNET"
-  payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
-}
 # ==========================================
 # RUTAS DE API GATEWAY (PROTEGIDAS CON COGNITO)
 # ==========================================
