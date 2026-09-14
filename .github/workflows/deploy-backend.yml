@@ -98,7 +98,7 @@ jobs:
           AZURE_AD_ISSUER_URI: ${{ secrets.AZURE_AD_ISSUER_URI }}
           AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
         run: |
-          printf 'DB_PASSWORD=%s\nMAIL_USERNAME=%s\nMAIL_PASSWORD=%s\nAZURE_AD_ISSUER_URI=%s\nAZURE_AD_CLIENT_ID=%s\n' \
+          printf 'DB_PASSWORD="%s"\nMAIL_USERNAME="%s"\nMAIL_PASSWORD="%s"\nAZURE_AD_ISSUER_URI="%s"\nAZURE_AD_CLIENT_ID="%s"\n' \
             "$DB_PASSWORD" "$MAIL_USERNAME" "$MAIL_PASSWORD" "$AZURE_AD_ISSUER_URI" "$AZURE_AD_CLIENT_ID" > /tmp/.env
 
       - name: Upload JARs, .env y restart.sh a la EC2
