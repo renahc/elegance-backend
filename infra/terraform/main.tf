@@ -128,7 +128,8 @@ resource "aws_instance" "elegance_ec2" {
     
     DB_PASS="${var.db_password}"
     if [ -n "$DB_PASS" ]; then
-      mysql -u root -e "UPDATE mysql.user SET plugin = 'mysql_native_password', password = PASSWORD('$DB_PASS') WHERE User = 'root';" 2>/dev/null || true
+      mysql -u root -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$DB_PASS');" 2>/dev/null || \
+      mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$DB_PASS';" 2>/dev/null || true
       mysql -u root -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY '$DB_PASS' WITH GRANT OPTION;" 2>/dev/null || true
       mysql -u root -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' IDENTIFIED BY '$DB_PASS' WITH GRANT OPTION;" 2>/dev/null || true
       mysql -u root -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY '$DB_PASS' WITH GRANT OPTION;" 2>/dev/null || true

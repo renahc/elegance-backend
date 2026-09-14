@@ -122,4 +122,4 @@ jobs:
       - name: Restart services
         run: |
           ssh -o StrictHostKeyChecking=no -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
-            'chmod 600 /opt/elegance/.env && bash /opt/elegance/restart.sh'
+            'chmod 600 /opt/elegance/.env && bash /opt/elegance/restart.sh && sleep 8 && head -n 25 /opt/elegance/user.log 2>/dev/null || true'
