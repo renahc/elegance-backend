@@ -201,6 +201,24 @@ resource "aws_apigatewayv2_authorizer" "cognito_auth" {
   }
 }
 
+
+resource "null_resource" "wait_for_ec2" {
+  provisioner "remote-exec" {
+    inline = ["echo 'EC2 is ready'"]
+
+    connection {
+      type        = "ssh"
+      user        = "ec2-user"
+      private_key = tls_private_key.ec2_key.private_key_pem
+      host        = aws_instance.elegance_ec2.public_ip
+      timeout     = "5m"
+    }
+  }
+
+  depends_on = [aws_instance.elegance_ec2]
+}
+
+
 # ==========================================
 # INTEGRACIONES HTTP PROXY HACIA EC2
 # ==========================================
@@ -279,7 +297,37 @@ resource "aws_apigatewayv2_integration" "notifications_proxy_int" {
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
 }
+resource "aws_apigatewayv2_integration" "user_service_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/%7Bproxy%7D"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
 
+  depends_on = [null_resource.wait_for_ec2]
+}
+resource "aws_apigatewayv2_integration" "appointment_service_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/%7Bproxy%7D"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+
+  depends_on = [null_resource.wait_for_ec2]
+}
+
+resource "aws_apigatewayv2_integration" "notification_service_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8083/%7Bproxy%7D"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+
+  depends_on = [null_resource.wait_for_ec2]
+}
 # ==========================================
 # RUTAS DE API GATEWAY (PROTEGIDAS CON COGNITO)
 # ==========================================
