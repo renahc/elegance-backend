@@ -105,12 +105,31 @@ resource "aws_instance" "elegance_ec2" {
     
     # Actualizar repos (solo security updates)
     echo "[$(date)] Actualizando repos..."
-    yum update -y --security-only 2>&1 | tail -3
+    yum update -y --security-only || true
     
-    # Habilitar repositorio de Corretto 17 e instalar paquetes desde espejos de AWS (ultrarrápido)
-    echo "[$(date)] Instalando Java 17 (Corretto) y MariaDB desde espejos de AWS..."
-    amazon-linux-extras enable corretto17 2>&1 | tail -3 || true
-    yum install -y java-17-amazon-corretto-devel mariadb-server mariadb 2>&1 | tail -5
+    # Instalación robusta de Java 17 (Corretto) y MariaDB desde repos de AWS
+    echo "[$(date)] Instalando Java 17 (Corretto) y MariaDB..."
+    amazon-linux-extras install -y corretto17 || (
+      rpm --import https://yum.corretto.aws/corretto.key && \
+      curl -L -s -o /etc/yum.repos.d/corretto.repo https://yum.corretto.aws/corretto.repo && \
+      yum install -y java-17-amazon-corretto-devel || yum install -y java-17-amazon-corretto
+    ) || true
+
+    yum install -y mariadb-server mariadb || true
+    
+    # Verificar y crear enlace simbólico a /usr/bin/java si es necesario
+    if ! command -v java >/dev/null 2>&1 && [ ! -f /usr/bin/java ]; then
+      echo "[$(date)] Buscando ejecutable java en /usr/lib/jvm..."
+      JAVA_BIN=$(find /usr/lib/jvm -name java -type f 2>/dev/null | head -n 1)
+      if [ -n "$JAVA_BIN" ]; then
+        ln -sf "$JAVA_BIN" /usr/bin/java
+        echo "[$(date)] Enlace simbólico creado: /usr/bin/java -> $JAVA_BIN"
+      else
+        echo "[$(date)] ❌ ERROR: No se encontró ejecutable java tras la instalación."
+        echo "ERROR_JAVA_MISSING" > $STATUS_FILE
+        exit 1
+      fi
+    fi
     
     # Iniciar y habilitar MariaDB
     echo "[$(date)] Iniciando MariaDB..."

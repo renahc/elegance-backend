@@ -72,6 +72,9 @@ jobs:
             if [ "$STATUS" = "READY" ]; then
               echo "✅ EC2 lista y completamente aprovisionada ($i/60)."
               exit 0
+            elif [[ "$STATUS" == ERROR* ]]; then
+              echo "❌ Error en el aprovisionamiento de la EC2: $STATUS"
+              break
             fi
 
             if [ "$STATUS" = "NO_SSH" ]; then
