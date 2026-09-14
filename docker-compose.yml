@@ -6,7 +6,7 @@ services:
     image: mariadb:11-alpine  # Alpine = 10x más rápido
     container_name: elegance-db
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
       MYSQL_DATABASE: elegance_users
     ports:
       - "3306:3306"
@@ -32,11 +32,11 @@ services:
       - DB_PORT=3306
       - DB_NAME=elegance_users
       - DB_USER=root
-      - DB_PASSWORD=${DB_PASSWORD}
-      - MAIL_USERNAME=${MAIL_USERNAME}
-      - MAIL_PASSWORD=${MAIL_PASSWORD}
-      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI}
-      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID}
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
+      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
     ports:
       - "8082:8082"
     depends_on:
@@ -57,9 +57,9 @@ services:
       - DB_PORT=3306
       - DB_NAME=elegance_appointments
       - DB_USER=root
-      - DB_PASSWORD=${DB_PASSWORD}
-      - MAIL_USERNAME=${MAIL_USERNAME}
-      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
     ports:
       - "8081:8081"
     depends_on:
@@ -79,9 +79,9 @@ services:
       - DB_HOST=db
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=${DB_PASSWORD}
-      - MAIL_USERNAME=${MAIL_USERNAME}
-      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
     ports:
       - "8083:8083"
     depends_on:
