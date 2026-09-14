@@ -395,14 +395,4 @@ resource "aws_apigatewayv2_stage" "default" {
   }
 }
 
-# ==========================================
-# OUTPUTS
-# ==========================================
-output "ec2_public_ip" {
-  value = aws_instance.elegance_ec2.public_ip
-}
 
-output "ec2_private_key_pem" {
-  value     = tls_private_key.ec2_key.private_key_pem
-  sensitive = true
-}
