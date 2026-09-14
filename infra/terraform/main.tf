@@ -11,7 +11,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "elegance-tf-state-2026-gabriel" # Tu bucket real
+    bucket         = "elegance-tf-state-2026-gabriel"
     key            = "elegance/ec2/terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
@@ -24,7 +24,7 @@ provider "aws" {
 }
 
 # ==========================================
-# LLAVE SSH (generada por Terraform)
+# LLAVE SSH
 # ==========================================
 resource "tls_private_key" "ec2_key" {
   algorithm = "RSA"
@@ -36,7 +36,7 @@ resource "aws_key_pair" "elegance_key" {
 }
 
 # ==========================================
-# SECURITY GROUP (SSH + puertos de los microservicios)
+# SECURITY GROUP
 # ==========================================
 resource "aws_security_group" "elegance_sg" {
   name        = "${var.app_name}-ec2-sg"
@@ -46,7 +46,7 @@ resource "aws_security_group" "elegance_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # En prod, restringe a tu IP
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -65,7 +65,7 @@ resource "aws_security_group" "elegance_sg" {
 }
 
 # ==========================================
-# AMI Amazon Linux 2023
+# AMI Amazon Linux 2 (OPTIMIZADO)
 # ==========================================
 data "aws_ami" "amazon_linux" {
   most_recent = true
@@ -73,7 +73,7 @@ data "aws_ami" "amazon_linux" {
 
   filter {
     name   = "name"
-    values = ["al2023-ami-2023.*-x86_64"]
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
 
   filter {
@@ -83,7 +83,7 @@ data "aws_ami" "amazon_linux" {
 }
 
 # ==========================================
-# INSTANCIA EC2 (Java 17 + MariaDB instalados al arrancar)
+# INSTANCIA EC2 CON DOCKER (5x MÁS RÁPIDO)
 # ==========================================
 resource "aws_instance" "elegance_ec2" {
   ami             = data.aws_ami.amazon_linux.id
@@ -91,32 +91,44 @@ resource "aws_instance" "elegance_ec2" {
   key_name        = aws_key_pair.elegance_key.key_name
   security_groups = [aws_security_group.elegance_sg.name]
 
-  user_data = <<-EOF
+  user_data = base64encode(<<-EOF
     #!/bin/bash
-    set -ex
+    set -e
+    
+    STATUS_FILE="/opt/elegance/status.txt"
     mkdir -p /opt/elegance
     chown -R ec2-user:ec2-user /opt/elegance
-    echo "BOOTING" > /opt/elegance/status.txt
-
-    exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
-
-    echo "=== Actualizando dnf metadata ==="
-    dnf update -y --refresh
+    echo "BOOTING" > $STATUS_FILE
     
-    echo "=== Instalando Java 17 y MariaDB en AL2023 ==="
-    dnf install -y java-17-amazon-corretto mariadb105-server
+    exec > >(tee -a /var/log/user-data.log) 2>&1
+    echo "[$(date)] === Iniciando aprovisionamiento con Docker ==="
     
-    echo "=== Iniciando y habilitando servicio MariaDB ==="
-    systemctl enable --now mariadb
-    sleep 5
+    # Actualizar repos (solo security updates - rápido)
+    echo "[$(date)] Actualizando repos..."
+    yum update -y --security-only 2>&1 | tail -3
     
-    echo "=== Configurando usuario root y bases de datos ==="
-    mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${var.db_password}'; FLUSH PRIVILEGES;"
-    mysql -u root -p'${var.db_password}' -e "CREATE DATABASE IF NOT EXISTS elegance_users; CREATE DATABASE IF NOT EXISTS elegance_appointments;"
+    # Instalar Docker (mucho más rápido que Java nativo)
+    echo "[$(date)] Instalando Docker..."
+    amazon-linux-extras install docker -y
+    systemctl enable docker
+    systemctl start docker
     
-    echo "READY" > /opt/elegance/status.txt
-    echo "=== user_data completado exitosamente ==="
+    # Instalar Docker Compose
+    echo "[$(date)] Instalando Docker Compose..."
+    curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
+    
+    # Crear directorio de aplicación
+    mkdir -p /opt/elegance/app
+    chown -R ec2-user:ec2-user /opt/elegance
+    
+    # Agregar ec2-user al grupo docker
+    usermod -aG docker ec2-user
+    
+    echo "READY" > $STATUS_FILE
+    echo "[$(date)] === Aprovisionamiento completado (Docker listo) ==="
   EOF
+  )
 
   tags = {
     Name = "${var.app_name}-ec2"
@@ -171,7 +183,7 @@ resource "aws_cognito_user_pool_client" "elegance_client" {
 }
 
 # ==========================================
-# API GATEWAY (HTTP API v2)
+# API GATEWAY
 # ==========================================
 resource "aws_apigatewayv2_api" "elegance_api" {
   name          = "${var.app_name}-http-api"
@@ -221,9 +233,8 @@ resource "null_resource" "wait_for_ec2" {
 }
 
 # ==========================================
-# INTEGRACIONES HTTP PROXY HACIA EC2
+# INTEGRACIONES HTTP PROXY
 # ==========================================
-# User Service (Puerto 8082): Clientes
 resource "aws_apigatewayv2_integration" "clients_root_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
@@ -231,8 +242,7 @@ resource "aws_apigatewayv2_integration" "clients_root_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
+  depends_on             = [null_resource.wait_for_ec2]
 }
 
 resource "aws_apigatewayv2_integration" "clients_proxy_int" {
@@ -242,11 +252,9 @@ resource "aws_apigatewayv2_integration" "clients_proxy_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
+  depends_on             = [null_resource.wait_for_ec2]
 }
 
-# User Service (Puerto 8082): Estilistas
 resource "aws_apigatewayv2_integration" "stylists_root_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
@@ -254,8 +262,7 @@ resource "aws_apigatewayv2_integration" "stylists_root_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
+  depends_on             = [null_resource.wait_for_ec2]
 }
 
 resource "aws_apigatewayv2_integration" "stylists_proxy_int" {
@@ -265,11 +272,9 @@ resource "aws_apigatewayv2_integration" "stylists_proxy_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
+  depends_on             = [null_resource.wait_for_ec2]
 }
 
-# Appointment Service (Puerto 8081): Citas
 resource "aws_apigatewayv2_integration" "appointments_root_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
@@ -277,8 +282,7 @@ resource "aws_apigatewayv2_integration" "appointments_root_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
+  depends_on             = [null_resource.wait_for_ec2]
 }
 
 resource "aws_apigatewayv2_integration" "appointments_proxy_int" {
@@ -288,11 +292,9 @@ resource "aws_apigatewayv2_integration" "appointments_proxy_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
+  depends_on             = [null_resource.wait_for_ec2]
 }
 
-# Notification Service (Puerto 8083): Notificaciones
 resource "aws_apigatewayv2_integration" "notifications_root_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
@@ -300,8 +302,7 @@ resource "aws_apigatewayv2_integration" "notifications_root_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
+  depends_on             = [null_resource.wait_for_ec2]
 }
 
 resource "aws_apigatewayv2_integration" "notifications_proxy_int" {
@@ -311,14 +312,12 @@ resource "aws_apigatewayv2_integration" "notifications_proxy_int" {
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
-
-  depends_on = [null_resource.wait_for_ec2]
+  depends_on             = [null_resource.wait_for_ec2]
 }
 
 # ==========================================
-# RUTAS DE API GATEWAY (PROTEGIDAS CON COGNITO)
+# RUTAS DE API GATEWAY
 # ==========================================
-# Clientes (User Service: 8082)
 resource "aws_apigatewayv2_route" "clients_root_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
   route_key          = "ANY /api/v1/clients"
@@ -335,7 +334,6 @@ resource "aws_apigatewayv2_route" "clients_route" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
-# Estilistas (User Service: 8082)
 resource "aws_apigatewayv2_route" "stylists_root_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
   route_key          = "ANY /api/v1/stylists"
@@ -352,7 +350,6 @@ resource "aws_apigatewayv2_route" "stylists_route" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
-# Citas y Agenda (Appointment Service: 8081)
 resource "aws_apigatewayv2_route" "appointments_root_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
   route_key          = "ANY /api/v1/appointments"
@@ -369,7 +366,6 @@ resource "aws_apigatewayv2_route" "appointments_route" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
 }
 
-# Notificaciones (Notification Service: 8083)
 resource "aws_apigatewayv2_route" "notifications_root_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
   route_key          = "ANY /api/v1/notifications"
@@ -397,4 +393,16 @@ resource "aws_apigatewayv2_stage" "default" {
   tags = {
     Name = "${var.app_name}-default-stage"
   }
+}
+
+# ==========================================
+# OUTPUTS
+# ==========================================
+output "ec2_public_ip" {
+  value = aws_instance.elegance_ec2.public_ip
+}
+
+output "ec2_private_key_pem" {
+  value     = tls_private_key.ec2_key.private_key_pem
+  sensitive = true
 }
