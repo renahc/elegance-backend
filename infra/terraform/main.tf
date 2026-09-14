@@ -107,20 +107,24 @@ resource "aws_instance" "elegance_ec2" {
     echo "[$(date)] Actualizando repos..."
     yum update -y --security-only 2>&1 | tail -3
     
-    # Instalar Java 17 y MariaDB Server
-    echo "[$(date)] Instalando Java 17 y MariaDB..."
-    yum install -y java-17-amazon-corretto mariadb-server
-    
-    # Iniciar y habilitar MariaDB
-    echo "[$(date)] Iniciando servicio MariaDB..."
+    # Instalar MariaDB Server
+    echo "[$(date)] Instalando MariaDB..."
+    yum install -y mariadb-server mariadb 2>&1 | tail -5
     systemctl enable mariadb
     systemctl start mariadb
     
+    # Instalar Java 17 Amazon Corretto mediante RPM oficial
+    echo "[$(date)] Instalando Java 17 Amazon Corretto..."
+    rpm --import https://yum.corretto.aws/corretto.key 2>/dev/null || true
+    curl -L -s -o /tmp/corretto17.rpm https://corretto.aws/downloads/latest/amazon-corretto-17-x64-linux-jdk.rpm
+    yum localinstall -y /tmp/corretto17.rpm 2>&1 | tail -5
+    rm -f /tmp/corretto17.rpm
+    
     # Crear bases de datos para los microservicios
     echo "[$(date)] Configurando bases de datos iniciales..."
-    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_users;"
-    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_appointments;"
-    mysql -e "CREATE DATABASE IF NOT EXISTS elegancebd;"
+    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_users;" || true
+    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_appointments;" || true
+    mysql -e "CREATE DATABASE IF NOT EXISTS elegancebd;" || true
     
     if [ -n "${var.db_password}" ]; then
       mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${var.db_password}'; FLUSH PRIVILEGES;" 2>/dev/null || \
