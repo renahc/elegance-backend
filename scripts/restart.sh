@@ -71,6 +71,16 @@ nohup $JAVA_CMD -Xmx256m -jar -Dserver.port=8083 \
   -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
   elegance-notification-service.jar </dev/null > notification.log 2>&1 &
 
+if [ -f elegance-services-service.jar ]; then
+  nohup $JAVA_CMD -Xmx256m -jar -Dserver.port=8084 \
+    -Dspring.datasource.url="jdbc:mysql://localhost:3306/elegance_services?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
+    -Dspring.datasource.username=root \
+    -Dspring.datasource.password="${DB_PASSWORD:-}" \
+    -Dazure.activedirectory.issuer-uri="${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}" \
+    -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
+    elegance-services-service.jar </dev/null > services.log 2>&1 &
+fi
+
 sleep 5
 echo "=== Procesos Java en ejecución ==="
 ps aux | grep java || true

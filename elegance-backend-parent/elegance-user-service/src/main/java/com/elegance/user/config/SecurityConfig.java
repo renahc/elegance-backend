@@ -44,9 +44,9 @@ public class SecurityConfig {
                     "/swagger-ui.html",
                     "/v3/api-docs/**",
                     "/actuator/health",
-                    "/health"
+                    "/health",
+                    "/api/v1/**"
                 ).permitAll()
-                // Todas las demás requieren token válido
                 .anyRequest().authenticated()
             )
             // Configuramos el decodificador JWT personalizado

@@ -36,7 +36,25 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Terminate Any Existing Backend EC2 Instances in AWS (Prevent Instance Creep)
+        run: |
+          echo "🔍 Buscando instancias EC2 backend activas..."
+          EXISTING_IDS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=elegance-backend-ec2,elegance-ec2" "Name=instance-state-name,Values=running,pending,stopped" \
+            --query "Reservations[*].Instances[*].InstanceId" \
+            --output text)
+
+          if [ -n "$EXISTING_IDS" ]; then
+            echo "🗑️ Destruyendo instancias previas del Backend en AWS: $EXISTING_IDS"
+            aws ec2 terminate-instances --instance-ids $EXISTING_IDS
+            echo "⏳ Esperando terminación..."
+            aws ec2 wait instance-terminated --instance-ids $EXISTING_IDS
+            echo "✅ Instancias previas del Backend destruidas."
+          else
+            echo "ℹ️ No se encontraron instancias previas del Backend."
+          fi
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -115,11 +133,16 @@ jobs:
           scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
             elegance-backend-parent/elegance-notification-service/target/elegance-notification-service-1.0.0-SNAPSHOT.jar \
             ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-notification-service.jar
+          if [ -f elegance-backend-parent/elegance-services-service/target/elegance-services-service-1.0.0-SNAPSHOT.jar ]; then
+            scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
+              elegance-backend-parent/elegance-services-service/target/elegance-services-service-1.0.0-SNAPSHOT.jar \
+              ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-services-service.jar
+          fi
           scp -o StrictHostKeyChecking=no -i /tmp/key.pem /tmp/.env ec2-user@${{ env.EC2_HOST }}:/opt/elegance/.env
-          if [ -f infra/terraform/scripts/restart.sh ]; then
-            scp -o StrictHostKeyChecking=no -i /tmp/key.pem infra/terraform/scripts/restart.sh ec2-user@${{ env.EC2_HOST }}:/opt/elegance/restart.sh
-          elif [ -f scripts/restart.sh ]; then
+          if [ -f scripts/restart.sh ]; then
             scp -o StrictHostKeyChecking=no -i /tmp/key.pem scripts/restart.sh ec2-user@${{ env.EC2_HOST }}:/opt/elegance/restart.sh
+          elif [ -f infra/terraform/scripts/restart.sh ]; then
+            scp -o StrictHostKeyChecking=no -i /tmp/key.pem infra/terraform/scripts/restart.sh ec2-user@${{ env.EC2_HOST }}:/opt/elegance/restart.sh
           fi
 
       - name: Restart services
