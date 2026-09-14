@@ -122,6 +122,12 @@ resource "aws_instance" "elegance_ec2" {
     mysql -e "CREATE DATABASE IF NOT EXISTS elegance_appointments;"
     mysql -e "CREATE DATABASE IF NOT EXISTS elegancebd;"
     
+    if [ -n "${var.db_password}" ]; then
+      mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${var.db_password}'; FLUSH PRIVILEGES;" 2>/dev/null || \
+      mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('${var.db_password}'); FLUSH PRIVILEGES;" 2>/dev/null || \
+      mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY '${var.db_password}'; FLUSH PRIVILEGES;" 2>/dev/null || true
+    fi
+    
     # Asegurar permisos del directorio de la aplicación
     chown -R ec2-user:ec2-user /opt/elegance
     
