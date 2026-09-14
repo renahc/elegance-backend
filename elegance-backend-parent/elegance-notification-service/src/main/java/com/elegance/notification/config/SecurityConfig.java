@@ -25,7 +25,7 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Value("${azure.activedirectory.issuer-uri:https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}")
+    @Value("${azure.activedirectory.issuer-uri:https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/}")
     private String issuerUri;
     
     @Value("${azure.activedirectory.client-id:api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}")

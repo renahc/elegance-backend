@@ -62,7 +62,7 @@ Cada microservicio opera de forma autónoma como un **OAuth2 Resource Server** (
 - Validación de tokens JWT en la cabecera `Authorization: Bearer <TOKEN_AZURE>`.
 - Comprobación del emisor (*Issuer*) y validación de la audiencia (*Audience / Client ID*).
 - **Configuración Dinámica:** Los valores de emisor y audiencia son parametrizables vía variables de entorno o GitHub Secrets, contando con valores por defecto de contingencia:
-  - `AZURE_AD_ISSUER_URI` (por defecto: `https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/`)
+  - `AZURE_AD_ISSUER_URI` (por defecto: `https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/`)
   - `AZURE_AD_CLIENT_ID` (por defecto: `api://304d54f7-d485-478a-a1ea-0c2f874b0c1f`)
 - Rutas públicas exentas de autenticación:
   - `/swagger-ui/**`, `/swagger-ui.html`, `/v3/api-docs/**`, `/actuator/health`

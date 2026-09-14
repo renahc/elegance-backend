@@ -35,7 +35,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-root}
       - MAIL_USERNAME=${MAIL_USERNAME:-}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-}
-      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
+      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/}
       - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
     ports:
       - "8082:8082"
@@ -103,7 +103,7 @@ services:
       - DB_NAME=elegance_services
       - DB_USER=root
       - DB_PASSWORD=${DB_PASSWORD:-root}
-      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
+      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/}
       - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
     ports:
       - "8084:8084"
