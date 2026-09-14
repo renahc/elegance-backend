@@ -104,13 +104,13 @@ jobs:
       - name: Upload JARs, .env y restart.sh a la EC2
         run: |
           scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
-            elegance-backend-parent/elegance-user-service/target/elegance-user-service-*.jar \
+            elegance-backend-parent/elegance-user-service/target/elegance-user-service-1.0.0-SNAPSHOT.jar \
             ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-user-service.jar
           scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
-            elegance-backend-parent/elegance-appointment-service/target/elegance-appointment-service-*.jar \
+            elegance-backend-parent/elegance-appointment-service/target/elegance-appointment-service-1.0.0-SNAPSHOT.jar \
             ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-appointment-service.jar
           scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
-            elegance-backend-parent/elegance-notification-service/target/elegance-notification-service-*.jar \
+            elegance-backend-parent/elegance-notification-service/target/elegance-notification-service-1.0.0-SNAPSHOT.jar \
             ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-notification-service.jar
           scp -o StrictHostKeyChecking=no -i /tmp/key.pem /tmp/.env ec2-user@${{ env.EC2_HOST }}:/opt/elegance/.env
           if [ -f infra/terraform/scripts/restart.sh ]; then
