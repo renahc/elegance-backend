@@ -1,63 +1,99 @@
 version: '3.8'
 
 services:
-  # Base de datos compartida para desarrollo local
-  mysql-db:
-    image: mysql:8.0
+  # MySQL/MariaDB - Base de datos
+  db:
+    image: mariadb:11-alpine  # Alpine = 10x más rápido
+    container_name: elegance-db
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: elegance_db
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: elegance_users
     ports:
       - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - elegance-network
+    restart: unless-stopped
 
-  # Microservicio de Usuarios
+  # User Service (Puerto 8082)
   user-service:
     build:
-      context: ./elegance-backend-parent
-      dockerfile: elegance-user-service/Dockerfile
+      context: .
+      dockerfile: Dockerfile.user-service
+    container_name: elegance-user-service
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=elegance_users
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI}
+      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID}
     ports:
       - "8082:8082"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/elegance_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=rootpassword
-      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
-      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
     depends_on:
-      - mysql-db
+      db:
+        condition: service_healthy
+    networks:
+      - elegance-network
+    restart: unless-stopped
 
-  # Microservicio de Citas
+  # Appointment Service (Puerto 8081)
   appointment-service:
     build:
-      context: ./elegance-backend-parent
-      dockerfile: elegance-appointment-service/Dockerfile
+      context: .
+      dockerfile: Dockerfile.appointment-service
+    container_name: elegance-appointment-service
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=elegance_appointments
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
     ports:
       - "8081:8081"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/elegance_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=rootpassword
-      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
-      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
     depends_on:
-      - mysql-db
+      db:
+        condition: service_healthy
+    networks:
+      - elegance-network
+    restart: unless-stopped
 
-  # Microservicio de Notificaciones
+  # Notification Service (Puerto 8083)
   notification-service:
     build:
-      context: ./elegance-backend-parent
-      dockerfile: elegance-notification-service/Dockerfile
+      context: .
+      dockerfile: Dockerfile.notification-service
+    container_name: elegance-notification-service
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
     ports:
       - "8083:8083"
-    environment:
-      - SPRING_MAIL_HOST=smtp.gmail.com
-      - SPRING_MAIL_PORT=587
-      - SPRING_MAIL_USERNAME=${MAIL_USERNAME:-gabrielgamer498@gmail.com}
-      - SPRING_MAIL_PASSWORD=${MAIL_PASSWORD:-jnkn ieyh mynf xsdz}
-      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
-      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - elegance-network
+    restart: unless-stopped
 
 volumes:
-  mysql_data:
+  db_data:
+
+networks:
+  elegance-network:
+    driver: bridge
