@@ -12,6 +12,7 @@
         <module>elegance-notification-service</module>
         <module>elegance-user-service</module>
         <module>elegance-appointment-service</module>
+        <module>elegance-services-service</module>
     </modules>
     
     <properties>

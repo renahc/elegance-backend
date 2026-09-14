@@ -53,7 +53,7 @@ resource "aws_security_group" "elegance_sg" {
 
   ingress {
     from_port   = 8081
-    to_port     = 8083
+    to_port     = 8084
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -141,6 +141,7 @@ resource "aws_instance" "elegance_ec2" {
     echo "[$(date)] Configurando autenticación y bases de datos en MariaDB..."
     mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegance_users;" || true
     mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegance_appointments;" || true
+    mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegance_services;" || true
     mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegancebd;" || true
     
     DB_PASS="${var.db_password}"

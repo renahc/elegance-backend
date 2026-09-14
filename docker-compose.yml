@@ -91,6 +91,29 @@ services:
       - elegance-network
     restart: unless-stopped
 
+  # Services & Rates Service (Puerto 8084)
+  services-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.services-service
+    container_name: elegance-services-service
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=elegance_services
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
+      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
+    ports:
+      - "8084:8084"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - elegance-network
+    restart: unless-stopped
+
 volumes:
   db_data:
 
