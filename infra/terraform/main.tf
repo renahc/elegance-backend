@@ -101,32 +101,32 @@ resource "aws_instance" "elegance_ec2" {
     echo "BOOTING" > $STATUS_FILE
     
     exec > >(tee -a /var/log/user-data.log) 2>&1
-    echo "[$(date)] === Iniciando aprovisionamiento con Docker ==="
+    echo "[$(date)] === Iniciando aprovisionamiento (Java 17 + MariaDB) ==="
     
-    # Actualizar repos (solo security updates - rápido)
+    # Actualizar repos (solo security updates)
     echo "[$(date)] Actualizando repos..."
     yum update -y --security-only 2>&1 | tail -3
     
-    # Instalar Docker (mucho más rápido que Java nativo)
-    echo "[$(date)] Instalando Docker..."
-    amazon-linux-extras install docker -y
-    systemctl enable docker
-    systemctl start docker
+    # Instalar Java 17 y MariaDB Server
+    echo "[$(date)] Instalando Java 17 y MariaDB..."
+    yum install -y java-17-amazon-corretto mariadb-server
     
-    # Instalar Docker Compose
-    echo "[$(date)] Instalando Docker Compose..."
-    curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
+    # Iniciar y habilitar MariaDB
+    echo "[$(date)] Iniciando servicio MariaDB..."
+    systemctl enable mariadb
+    systemctl start mariadb
     
-    # Crear directorio de aplicación
-    mkdir -p /opt/elegance/app
+    # Crear bases de datos para los microservicios
+    echo "[$(date)] Configurando bases de datos iniciales..."
+    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_users;"
+    mysql -e "CREATE DATABASE IF NOT EXISTS elegance_appointments;"
+    mysql -e "CREATE DATABASE IF NOT EXISTS elegancebd;"
+    
+    # Asegurar permisos del directorio de la aplicación
     chown -R ec2-user:ec2-user /opt/elegance
     
-    # Agregar ec2-user al grupo docker
-    usermod -aG docker ec2-user
-    
     echo "READY" > $STATUS_FILE
-    echo "[$(date)] === Aprovisionamiento completado (Docker listo) ==="
+    echo "[$(date)] === Aprovisionamiento completado exitosamente ==="
   EOF
   )
 
