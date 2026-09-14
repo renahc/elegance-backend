@@ -23,7 +23,24 @@ else
 fi
 
 if [ -z "$JAVA_CMD" ]; then
-  echo "❌ Error: Java binary not found on the instance!"
+  echo "⚠️ Java binary not found on the instance! Attempting emergency installation of Java 17..."
+  sudo amazon-linux-extras install -y corretto17 || (
+    sudo rpm --import https://yum.corretto.aws/corretto.key && \
+    sudo curl -L -s -o /etc/yum.repos.d/corretto.repo https://yum.corretto.aws/corretto.repo && \
+    sudo yum install -y java-17-amazon-corretto-devel || sudo yum install -y java-17-amazon-corretto
+  ) || true
+
+  if command -v java >/dev/null 2>&1; then
+    JAVA_CMD="java"
+  elif [ -f /usr/bin/java ]; then
+    JAVA_CMD="/usr/bin/java"
+  else
+    JAVA_CMD=$(find /usr/lib/jvm -name java -type f 2>/dev/null | head -n 1)
+  fi
+fi
+
+if [ -z "$JAVA_CMD" ]; then
+  echo "❌ Error: Java binary not found on the instance even after emergency install!"
   exit 1
 fi
 

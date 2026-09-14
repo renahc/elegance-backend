@@ -86,10 +86,11 @@ data "aws_ami" "amazon_linux" {
 # INSTANCIA EC2 CON DOCKER (5x MÁS RÁPIDO)
 # ==========================================
 resource "aws_instance" "elegance_ec2" {
-  ami             = data.aws_ami.amazon_linux.id
-  instance_type   = var.instance_type
-  key_name        = aws_key_pair.elegance_key.key_name
-  security_groups = [aws_security_group.elegance_sg.name]
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = var.instance_type
+  key_name                    = aws_key_pair.elegance_key.key_name
+  security_groups             = [aws_security_group.elegance_sg.name]
+  user_data_replace_on_change = true
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
