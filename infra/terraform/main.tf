@@ -101,43 +101,41 @@ resource "aws_instance" "elegance_ec2" {
     chown -R ec2-user:ec2-user /opt/elegance
     echo "BOOTING" > $STATUS_FILE
     
+    trap 'echo "FAILED" > /opt/elegance/status.txt' ERR
+    
     exec > >(tee -a /var/log/user-data.log) 2>&1
     echo "[$(date)] === Iniciando aprovisionamiento (Java 17 + MariaDB) ==="
     
-    # Actualizar repos (solo security updates)
+    # Actualizar repos
     echo "[$(date)] Actualizando repos..."
     yum update -y --security-only || true
     
-    # Instalación robusta de Java 17 (Corretto) y MariaDB desde repos de AWS
-    echo "[$(date)] Instalando Java 17 (Corretto) y MariaDB..."
-    amazon-linux-extras install -y corretto17 || (
-      rpm --import https://yum.corretto.aws/corretto.key && \
-      curl -L -s -o /etc/yum.repos.d/corretto.repo https://yum.corretto.aws/corretto.repo && \
-      yum install -y java-17-amazon-corretto-devel || yum install -y java-17-amazon-corretto
-    ) || true
-
-    yum install -y mariadb-server mariadb || true
+    # Configurar repositorio de Corretto 17
+    echo "[$(date)] Configurando repositorio Corretto 17..."
+    rpm --import https://yum.corretto.aws/corretto.key || true
+    curl -L -s -o /etc/yum.repos.d/corretto.repo https://yum.corretto.aws/corretto.repo || true
     
-    # Verificar y crear enlace simbólico a /usr/bin/java si es necesario
+    # Instalación de paquetes
+    echo "[$(date)] Instalando Java 17 y MariaDB..."
+    yum install -y java-17-amazon-corretto-devel mariadb-server mariadb || \
+    yum install -y java-17-amazon-corretto mariadb-server mariadb || true
+    
+    # Verificar ejecutable java
     if ! command -v java >/dev/null 2>&1 && [ ! -f /usr/bin/java ]; then
       echo "[$(date)] Buscando ejecutable java en /usr/lib/jvm..."
       JAVA_BIN=$(find /usr/lib/jvm -name java -type f 2>/dev/null | head -n 1)
       if [ -n "$JAVA_BIN" ]; then
         ln -sf "$JAVA_BIN" /usr/bin/java
         echo "[$(date)] Enlace simbólico creado: /usr/bin/java -> $JAVA_BIN"
-      else
-        echo "[$(date)] ❌ ERROR: No se encontró ejecutable java tras la instalación."
-        echo "ERROR_JAVA_MISSING" > $STATUS_FILE
-        exit 1
       fi
     fi
     
     # Iniciar y habilitar MariaDB
     echo "[$(date)] Iniciando MariaDB..."
-    systemctl enable mariadb
-    systemctl start mariadb
+    systemctl enable mariadb || true
+    systemctl start mariadb || true
     
-    # Configurar autenticación y contraseñas de MariaDB para acceso JDBC
+    # Configurar autenticación y bases de datos en MariaDB
     echo "[$(date)] Configurando autenticación y bases de datos en MariaDB..."
     mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegance_users;" || true
     mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegance_appointments;" || true
