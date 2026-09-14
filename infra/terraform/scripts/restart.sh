@@ -9,8 +9,16 @@ fi
 
 pkill -f 'elegance-.*\.jar' || true
 sleep 5
-export JAVA_HOME="/usr/lib/jvm/java-17-amazon-corretto"
-export PATH="$JAVA_HOME/bin:$PATH"
+if [ -z "$JAVA_HOME" ]; then
+  if [ -d "/usr/lib/jvm/java-17-amazon-corretto" ]; then
+    export JAVA_HOME="/usr/lib/jvm/java-17-amazon-corretto"
+  elif [ -d "/usr/lib/jvm/java-17-amazon-corretto.x86_64" ]; then
+    export JAVA_HOME="/usr/lib/jvm/java-17-amazon-corretto.x86_64"
+  fi
+fi
+if [ -n "$JAVA_HOME" ]; then
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
 
 nohup java -Xmx256m -jar -Dserver.port=8082 \
   -Dspring.datasource.url="jdbc:mysql://localhost:3306/elegance_users?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
