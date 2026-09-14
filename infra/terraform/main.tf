@@ -107,18 +107,15 @@ resource "aws_instance" "elegance_ec2" {
     echo "[$(date)] Actualizando repos..."
     yum update -y --security-only 2>&1 | tail -3
     
-    # Instalar MariaDB Server
-    echo "[$(date)] Instalando MariaDB..."
-    yum install -y mariadb-server mariadb 2>&1 | tail -5
+    # Habilitar repositorio de Corretto 17 e instalar paquetes desde espejos de AWS (ultrarrápido)
+    echo "[$(date)] Instalando Java 17 (Corretto) y MariaDB desde espejos de AWS..."
+    amazon-linux-extras enable corretto17 2>&1 | tail -3 || true
+    yum install -y java-17-amazon-corretto-devel mariadb-server mariadb 2>&1 | tail -5
+    
+    # Iniciar y habilitar MariaDB
+    echo "[$(date)] Iniciando MariaDB..."
     systemctl enable mariadb
     systemctl start mariadb
-    
-    # Instalar Java 17 Amazon Corretto mediante RPM oficial
-    echo "[$(date)] Instalando Java 17 Amazon Corretto..."
-    rpm --import https://yum.corretto.aws/corretto.key 2>/dev/null || true
-    curl -L -s -o /tmp/corretto17.rpm https://corretto.aws/downloads/latest/amazon-corretto-17-x64-linux-jdk.rpm
-    yum localinstall -y /tmp/corretto17.rpm 2>&1 | tail -5
-    rm -f /tmp/corretto17.rpm
     
     # Configurar autenticación y contraseñas de MariaDB para acceso JDBC
     echo "[$(date)] Configurando autenticación y bases de datos en MariaDB..."
