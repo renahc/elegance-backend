@@ -10,6 +10,7 @@ terraform {
     }
   }
 
+/*
   backend "s3" {
     bucket         = "elegance-tf-state-2026-gabriel"
     key            = "elegance/ec2/terraform.tfstate"
@@ -17,6 +18,7 @@ terraform {
     encrypt        = true
     dynamodb_table = "elegance-tf-lock"
   }
+*/
 }
 
 provider "aws" {
@@ -31,15 +33,15 @@ resource "tls_private_key" "ec2_key" {
 }
 
 resource "aws_key_pair" "elegance_key" {
-  key_name   = "${var.app_name}-key"
-  public_key = tls_private_key.ec2_key.public_key_openssh
+  key_name_prefix = "${var.app_name}-key-"
+  public_key      = tls_private_key.ec2_key.public_key_openssh
 }
 
 # ==========================================
 # SECURITY GROUP
 # ==========================================
 resource "aws_security_group" "elegance_sg" {
-  name        = "${var.app_name}-ec2-sg"
+  name_prefix = "${var.app_name}-ec2-sg-"
   description = "Permite SSH y puertos 8081-8083"
 
   ingress {
