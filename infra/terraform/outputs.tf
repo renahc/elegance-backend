@@ -1,10 +1,10 @@
 output "ec2_public_ip" {
-  description = "IP pública de la instancia EC2"
+  description = "IP pública de la instancia EC2 de Backend"
   value       = aws_instance.elegance_ec2.public_ip
 }
 
 output "ec2_username" {
-  description = "Usuario SSH de Amazon Linux 2023"
+  description = "Usuario SSH"
   value       = "ec2-user"
 }
 
@@ -19,17 +19,12 @@ output "api_gateway_url" {
   value       = aws_apigatewayv2_stage.default.invoke_url
 }
 
-output "cognito_user_pool_id" {
-  description = "ID del User Pool de Cognito"
-  value       = aws_cognito_user_pool.elegance_pool.id
+output "rabbitmq_public_ip" {
+  description = "IP pública de la instancia EC2 del Clúster RabbitMQ"
+  value       = aws_instance.elegance_rabbitmq_ec2.public_ip
 }
 
-output "cognito_client_id" {
-  description = "Client ID de la aplicación para Cognito"
-  value       = aws_cognito_user_pool_client.elegance_client.id
-}
-
-output "cognito_issuer" {
-  description = "URL del emisor de tokens JWT de Cognito"
-  value       = "https://${aws_cognito_user_pool.elegance_pool.endpoint}"
+output "rabbitmq_dashboard_url" {
+  description = "URL del Dashboard de Gestión de RabbitMQ"
+  value       = "http://${aws_instance.elegance_rabbitmq_ec2.public_ip}:15672"
 }

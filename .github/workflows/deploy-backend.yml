@@ -42,18 +42,18 @@ jobs:
         run: |
           echo "🔍 Buscando instancias EC2 backend activas..."
           EXISTING_IDS=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=elegance-backend-ec2,elegance-ec2" "Name=instance-state-name,Values=running,pending,stopped" \
+            --filters "Name=tag:Name,Values=elegance-backend-ec2,elegance-ec2,elegance-rabbitmq-ec2" "Name=instance-state-name,Values=running,pending,stopped" \
             --query "Reservations[*].Instances[*].InstanceId" \
             --output text)
 
           if [ -n "$EXISTING_IDS" ]; then
-            echo "🗑️ Destruyendo instancias previas del Backend en AWS: $EXISTING_IDS"
+            echo "🗑️ Destruyendo instancias previas en AWS: $EXISTING_IDS"
             aws ec2 terminate-instances --instance-ids $EXISTING_IDS
             echo "⏳ Esperando terminación..."
             aws ec2 wait instance-terminated --instance-ids $EXISTING_IDS
-            echo "✅ Instancias previas del Backend destruidas."
+            echo "✅ Instancias previas destruidas."
           else
-            echo "ℹ️ No se encontraron instancias previas del Backend."
+            echo "ℹ️ No se encontraron instancias previas."
           fi
 
       - name: Setup Terraform
@@ -77,6 +77,8 @@ jobs:
         working-directory: ./infra/terraform
         run: |
           echo "EC2_HOST=$(terraform output -raw ec2_public_ip)" >> $GITHUB_ENV
+          echo "RABBITMQ_HOST=$(terraform output -raw rabbitmq_public_ip)" >> $GITHUB_ENV
+          echo "API_GATEWAY_URL=$(terraform output -raw api_gateway_url)" >> $GITHUB_ENV
           terraform output -raw ec2_private_key_pem > /tmp/key.pem
           chmod 600 /tmp/key.pem
 
@@ -111,6 +113,23 @@ jobs:
             'cat /var/log/user-data.log 2>/dev/null || cat /var/log/cloud-init-output.log 2>/dev/null' || true
           exit 1
 
+      - name: Wait for RabbitMQ EC2 to be ready
+        run: |
+          echo "⏳ Esperando inicialización del Clúster RabbitMQ (${{ env.RABBITMQ_HOST }})..."
+          for i in $(seq 1 45); do
+            STATUS=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.RABBITMQ_HOST }} \
+              'cat /opt/rabbitmq/status.txt 2>/dev/null || echo "CONNECTING"' 2>/dev/null || echo "NO_SSH")
+
+            if [ "$STATUS" = "READY" ]; then
+              echo "✅ Clúster RabbitMQ listo y activo ($i/45)."
+              break
+            elif [ "$STATUS" = "FAILED" ]; then
+              echo "⚠️ Error en aprovisionamiento de RabbitMQ, continuando..."
+              break
+            fi
+            sleep 6
+          done
+
       - name: Create .env file with secrets
         env:
           DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
@@ -119,8 +138,8 @@ jobs:
           AZURE_AD_ISSUER_URI: ${{ secrets.AZURE_AD_ISSUER_URI }}
           AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
         run: |
-          printf 'DB_PASSWORD="%s"\nMAIL_USERNAME="%s"\nMAIL_PASSWORD="%s"\nAZURE_AD_ISSUER_URI="%s"\nAZURE_AD_CLIENT_ID="%s"\n' \
-            "$DB_PASSWORD" "$MAIL_USERNAME" "$MAIL_PASSWORD" "$AZURE_AD_ISSUER_URI" "$AZURE_AD_CLIENT_ID" > /tmp/.env
+          printf 'DB_PASSWORD="%s"\nMAIL_USERNAME="%s"\nMAIL_PASSWORD="%s"\nAZURE_AD_ISSUER_URI="%s"\nAZURE_AD_CLIENT_ID="%s"\nSPRING_RABBITMQ_HOST="%s"\nSPRING_RABBITMQ_PORT="5672"\nSPRING_RABBITMQ_USERNAME="admin"\nSPRING_RABBITMQ_PASSWORD="admin123"\n' \
+            "$DB_PASSWORD" "$MAIL_USERNAME" "$MAIL_PASSWORD" "$AZURE_AD_ISSUER_URI" "$AZURE_AD_CLIENT_ID" "$RABBITMQ_HOST" > /tmp/.env
 
       - name: Upload JARs, .env y restart.sh a la EC2
         run: |

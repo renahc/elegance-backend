@@ -10,7 +10,7 @@ terraform {
     }
   }
 
-/*
+  /*
   backend "s3" {
     bucket         = "elegance-tf-state-2026-gabriel"
     key            = "elegance/ec2/terraform.tfstate"
@@ -26,7 +26,7 @@ provider "aws" {
 }
 
 # ==========================================
-# LLAVE SSH
+# LLAVE SSH COMPARTIDA
 # ==========================================
 resource "tls_private_key" "ec2_key" {
   algorithm = "RSA"
@@ -38,17 +38,18 @@ resource "aws_key_pair" "elegance_key" {
 }
 
 # ==========================================
-# SECURITY GROUP
+# SECURITY GROUP: EC2 BACKEND
 # ==========================================
 resource "aws_security_group" "elegance_sg" {
   name_prefix = "${var.app_name}-ec2-sg-"
-  description = "Permite SSH y puertos 8081-8083"
+  description = "Permite SSH y puertos de microservicios 8081-8084"
 
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH"
   }
 
   ingress {
@@ -56,6 +57,7 @@ resource "aws_security_group" "elegance_sg" {
     to_port     = 8084
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Microservicios Spring Boot"
   }
 
   egress {
@@ -63,6 +65,76 @@ resource "aws_security_group" "elegance_sg" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.app_name}-backend-sg"
+  }
+}
+
+# ==========================================
+# SECURITY GROUP: CLÚSTER RABBITMQ
+# ==========================================
+resource "aws_security_group" "rabbitmq_sg" {
+  name_prefix = "${var.app_name}-rabbitmq-sg-"
+  description = "Permite AMQP (5672/5673), Management UI (15672/15673) y SSH"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH"
+  }
+
+  ingress {
+    from_port   = 5672
+    to_port     = 5673
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "AMQP Node 1 y Node 2"
+  }
+
+  ingress {
+    from_port   = 15672
+    to_port     = 15673
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "RabbitMQ Management UI Web"
+  }
+
+  ingress {
+    from_port   = 4369
+    to_port     = 4369
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "EPMD Erlang"
+  }
+
+  ingress {
+    from_port   = 25672
+    to_port     = 25672
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Erlang distribution"
+  }
+
+  ingress {
+    from_port = 0
+    to_port   = 0
+    protocol  = "-1"
+    self      = true
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.app_name}-rabbitmq-sg"
   }
 }
 
@@ -85,7 +157,7 @@ data "aws_ami" "amazon_linux" {
 }
 
 # ==========================================
-# INSTANCIA EC2 CON DOCKER (5x MÁS RÁPIDO)
+# INSTANCIA EC2 N° 1: BACKEND Y BD (Java 17 + MariaDB)
 # ==========================================
 resource "aws_instance" "elegance_ec2" {
   ami                         = data.aws_ami.amazon_linux.id
@@ -163,59 +235,131 @@ resource "aws_instance" "elegance_ec2" {
   )
 
   tags = {
-    Name = "${var.app_name}-ec2"
+    Name = "elegance-backend-ec2"
   }
 }
 
 # ==========================================
-# COGNITO USER POOL & CLIENT
+# INSTANCIA EC2 N° 2: CLÚSTER RABBITMQ (2 NODOS DOCKER)
 # ==========================================
-resource "aws_cognito_user_pool" "elegance_pool" {
-  name                     = "${var.app_name}-user-pool"
-  username_attributes      = ["email"]
-  auto_verified_attributes = ["email"]
+resource "aws_instance" "elegance_rabbitmq_ec2" {
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = var.instance_type
+  key_name                    = aws_key_pair.elegance_key.key_name
+  security_groups             = [aws_security_group.rabbitmq_sg.name]
+  user_data_replace_on_change = true
 
-  password_policy {
-    minimum_length    = 8
-    require_lowercase = true
-    require_numbers   = true
-    require_symbols   = false
-    require_uppercase = true
-  }
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    set -e
+    
+    STATUS_FILE="/opt/rabbitmq/status.txt"
+    mkdir -p /opt/rabbitmq
+    chown -R ec2-user:ec2-user /opt/rabbitmq
+    echo "BOOTING" > $STATUS_FILE
 
-  account_recovery_setting {
-    recovery_mechanism {
-      name     = "verified_email"
-      priority = 1
-    }
-  }
+    trap 'echo "FAILED" > /opt/rabbitmq/status.txt' ERR
+    exec > >(tee -a /var/log/user-data-rabbitmq.log) 2>&1
 
-  admin_create_user_config {
-    allow_admin_create_user_only = false
-  }
+    echo "[$(date)] === Instalando Docker para RabbitMQ Clúster ==="
+    amazon-linux-extras install -y docker || yum install -y docker
+    systemctl enable docker
+    systemctl start docker
+    usermod -a -G docker ec2-user
+
+    echo "[$(date)] Instalando Docker Compose..."
+    mkdir -p /usr/local/bin
+    curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
+    ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+
+    cd /opt/rabbitmq
+
+    # Configuración para descubrimiento de clúster peer discovery clásico
+    cat <<'CONF' > rabbitmq-cluster.conf
+loopback_users.guest = false
+listeners.tcp.default = 5672
+management.tcp.port = 15672
+cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config
+cluster_formation.classic_config.nodes.1 = rabbit@rabbitmq1
+cluster_formation.classic_config.nodes.2 = rabbit@rabbitmq2
+CONF
+    chmod 644 rabbitmq-cluster.conf
+
+    # Docker Compose con 2 nodos en clúster
+    cat <<'COMPOSE' > docker-compose.yml
+version: '3.8'
+
+services:
+  rabbitmq1:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq1
+    hostname: rabbitmq1
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=ELEGANCE_CLUSTER_SECRET_COOKIE_2026
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    volumes:
+      - rabbitmq1_data:/var/lib/rabbitmq
+      - ./rabbitmq-cluster.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    networks:
+      - rabbitmq_cluster_net
+
+  rabbitmq2:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq2
+    hostname: rabbitmq2
+    restart: unless-stopped
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=ELEGANCE_CLUSTER_SECRET_COOKIE_2026
+    volumes:
+      - rabbitmq2_data:/var/lib/rabbitmq
+      - ./rabbitmq-cluster.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    depends_on:
+      - rabbitmq1
+    networks:
+      - rabbitmq_cluster_net
+
+volumes:
+  rabbitmq1_data:
+  rabbitmq2_data:
+
+networks:
+  rabbitmq_cluster_net:
+    driver: bridge
+COMPOSE
+
+    chown -R ec2-user:ec2-user /opt/rabbitmq
+    docker-compose up -d
+
+    echo "[$(date)] Esperando a que el clúster RabbitMQ responda en el puerto 15672..."
+    for i in $(seq 1 40); do
+      if curl -s -u admin:admin123 http://localhost:15672/api/overview >/dev/null 2>&1; then
+        echo "READY" > $STATUS_FILE
+        echo "[$(date)] === Clúster RabbitMQ de 2 Nodos listo y activo ==="
+        exit 0
+      fi
+      sleep 3
+    done
+
+    echo "READY" > $STATUS_FILE
+  EOF
+  )
 
   tags = {
-    Name = "${var.app_name}-cognito-pool"
+    Name = "elegance-rabbitmq-ec2"
   }
 }
 
-resource "aws_cognito_user_pool_client" "elegance_client" {
-  name         = "${var.app_name}-app-client"
-  user_pool_id = aws_cognito_user_pool.elegance_pool.id
-
-  generate_secret = false
-
-  explicit_auth_flows = [
-    "ALLOW_USER_PASSWORD_AUTH",
-    "ALLOW_REFRESH_TOKEN_AUTH",
-    "ALLOW_USER_SRP_AUTH"
-  ]
-
-  prevent_user_existence_errors = "ENABLED"
-}
-
 # ==========================================
-# API GATEWAY
+# AWS API GATEWAY (HTTP API v2)
 # ==========================================
 resource "aws_apigatewayv2_api" "elegance_api" {
   name          = "${var.app_name}-http-api"
@@ -223,8 +367,8 @@ resource "aws_apigatewayv2_api" "elegance_api" {
 
   cors_configuration {
     allow_origins = ["*"]
-    allow_methods = ["*"]
-    allow_headers = ["*"]
+    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+    allow_headers = ["Authorization", "Content-Type", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"]
     max_age       = 300
   }
 
@@ -234,17 +378,20 @@ resource "aws_apigatewayv2_api" "elegance_api" {
 }
 
 # ==========================================
-# COGNITO JWT AUTHORIZER
+# AZURE AD / ENTRA ID JWT AUTHORIZER
 # ==========================================
-resource "aws_apigatewayv2_authorizer" "cognito_auth" {
+resource "aws_apigatewayv2_authorizer" "azure_ad_auth" {
   api_id           = aws_apigatewayv2_api.elegance_api.id
   authorizer_type  = "JWT"
   identity_sources = ["$request.header.Authorization"]
-  name             = "${var.app_name}-cognito-authorizer"
+  name             = "${var.app_name}-azure-ad-authorizer"
 
   jwt_configuration {
-    audience = [aws_cognito_user_pool_client.elegance_client.id]
-    issuer   = "https://${aws_cognito_user_pool.elegance_pool.endpoint}"
+    audience = [
+      "413ae20f-d59e-4b81-8864-97d5945f7d5f",
+      "api://304d54f7-d485-478a-a1ea-0c2f874b0c1f"
+    ]
+    issuer = "https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/"
   }
 }
 
@@ -265,8 +412,31 @@ resource "null_resource" "wait_for_ec2" {
 }
 
 # ==========================================
-# INTEGRACIONES HTTP PROXY
+# INTEGRACIONES HTTP PROXY (MICROSERVICIOS)
 # ==========================================
+
+# 1. Appointments (Puerto 8081)
+resource "aws_apigatewayv2_integration" "appointments_root_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/api/v1/appointments"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+  depends_on             = [null_resource.wait_for_ec2]
+}
+
+resource "aws_apigatewayv2_integration" "appointments_proxy_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/api/v1/appointments/{proxy}"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+  depends_on             = [null_resource.wait_for_ec2]
+}
+
+# 2. Users: Clients, Stylists, Auth (Puerto 8082)
 resource "aws_apigatewayv2_integration" "clients_root_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
@@ -307,26 +477,27 @@ resource "aws_apigatewayv2_integration" "stylists_proxy_int" {
   depends_on             = [null_resource.wait_for_ec2]
 }
 
-resource "aws_apigatewayv2_integration" "appointments_root_int" {
+resource "aws_apigatewayv2_integration" "auth_root_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
-  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/api/v1/appointments"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/api/v1/auth"
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
   depends_on             = [null_resource.wait_for_ec2]
 }
 
-resource "aws_apigatewayv2_integration" "appointments_proxy_int" {
+resource "aws_apigatewayv2_integration" "auth_proxy_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
-  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8081/api/v1/appointments/{proxy}"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8082/api/v1/auth/{proxy}"
   integration_method     = "ANY"
   connection_type        = "INTERNET"
   payload_format_version = "1.0"
   depends_on             = [null_resource.wait_for_ec2]
 }
 
+# 3. Notifications (Puerto 8083)
 resource "aws_apigatewayv2_integration" "notifications_root_int" {
   api_id                 = aws_apigatewayv2_api.elegance_api.id
   integration_type       = "HTTP_PROXY"
@@ -347,47 +518,58 @@ resource "aws_apigatewayv2_integration" "notifications_proxy_int" {
   depends_on             = [null_resource.wait_for_ec2]
 }
 
+# 4. Services & Rates (Puerto 8084)
+resource "aws_apigatewayv2_integration" "services_root_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8084/api/v1/services"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+  depends_on             = [null_resource.wait_for_ec2]
+}
+
+resource "aws_apigatewayv2_integration" "services_proxy_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8084/api/v1/services/{proxy}"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+  depends_on             = [null_resource.wait_for_ec2]
+}
+
+resource "aws_apigatewayv2_integration" "rates_root_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8084/api/v1/rates"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+  depends_on             = [null_resource.wait_for_ec2]
+}
+
+resource "aws_apigatewayv2_integration" "rates_proxy_int" {
+  api_id                 = aws_apigatewayv2_api.elegance_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "http://${aws_instance.elegance_ec2.public_ip}:8084/api/v1/rates/{proxy}"
+  integration_method     = "ANY"
+  connection_type        = "INTERNET"
+  payload_format_version = "1.0"
+  depends_on             = [null_resource.wait_for_ec2]
+}
+
 # ==========================================
-# RUTAS DE API GATEWAY
+# RUTAS DE API GATEWAY (CON AZURE AD JWT AUTHORIZER)
 # ==========================================
-resource "aws_apigatewayv2_route" "clients_root_route" {
-  api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/clients"
-  target             = "integrations/${aws_apigatewayv2_integration.clients_root_int.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
-}
 
-resource "aws_apigatewayv2_route" "clients_route" {
-  api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/clients/{proxy+}"
-  target             = "integrations/${aws_apigatewayv2_integration.clients_proxy_int.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
-}
-
-resource "aws_apigatewayv2_route" "stylists_root_route" {
-  api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/stylists"
-  target             = "integrations/${aws_apigatewayv2_integration.stylists_root_int.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
-}
-
-resource "aws_apigatewayv2_route" "stylists_route" {
-  api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = "ANY /api/v1/stylists/{proxy+}"
-  target             = "integrations/${aws_apigatewayv2_integration.stylists_proxy_int.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
-}
-
+# Appointments
 resource "aws_apigatewayv2_route" "appointments_root_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
   route_key          = "ANY /api/v1/appointments"
   target             = "integrations/${aws_apigatewayv2_integration.appointments_root_int.id}"
   authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
 }
 
 resource "aws_apigatewayv2_route" "appointments_route" {
@@ -395,15 +577,67 @@ resource "aws_apigatewayv2_route" "appointments_route" {
   route_key          = "ANY /api/v1/appointments/{proxy+}"
   target             = "integrations/${aws_apigatewayv2_integration.appointments_proxy_int.id}"
   authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
 }
 
+# Clients
+resource "aws_apigatewayv2_route" "clients_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/clients"
+  target             = "integrations/${aws_apigatewayv2_integration.clients_root_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+resource "aws_apigatewayv2_route" "clients_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/clients/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.clients_proxy_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+# Stylists
+resource "aws_apigatewayv2_route" "stylists_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/stylists"
+  target             = "integrations/${aws_apigatewayv2_integration.stylists_root_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+resource "aws_apigatewayv2_route" "stylists_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/stylists/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.stylists_proxy_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+# Auth
+resource "aws_apigatewayv2_route" "auth_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/auth"
+  target             = "integrations/${aws_apigatewayv2_integration.auth_root_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+resource "aws_apigatewayv2_route" "auth_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/auth/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.auth_proxy_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+# Notifications
 resource "aws_apigatewayv2_route" "notifications_root_route" {
   api_id             = aws_apigatewayv2_api.elegance_api.id
   route_key          = "ANY /api/v1/notifications"
   target             = "integrations/${aws_apigatewayv2_integration.notifications_root_int.id}"
   authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
 }
 
 resource "aws_apigatewayv2_route" "notifications_route" {
@@ -411,11 +645,45 @@ resource "aws_apigatewayv2_route" "notifications_route" {
   route_key          = "ANY /api/v1/notifications/{proxy+}"
   target             = "integrations/${aws_apigatewayv2_integration.notifications_proxy_int.id}"
   authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito_auth.id
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+# Services
+resource "aws_apigatewayv2_route" "services_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/services"
+  target             = "integrations/${aws_apigatewayv2_integration.services_root_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+resource "aws_apigatewayv2_route" "services_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/services/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.services_proxy_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+# Rates
+resource "aws_apigatewayv2_route" "rates_root_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/rates"
+  target             = "integrations/${aws_apigatewayv2_integration.rates_root_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
+}
+
+resource "aws_apigatewayv2_route" "rates_route" {
+  api_id             = aws_apigatewayv2_api.elegance_api.id
+  route_key          = "ANY /api/v1/rates/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.rates_proxy_int.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.azure_ad_auth.id
 }
 
 # ==========================================
-# STAGE DEPLOYMENT
+# STAGE CON AUTO-DEPLOY
 # ==========================================
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.elegance_api.id
@@ -426,5 +694,3 @@ resource "aws_apigatewayv2_stage" "default" {
     Name = "${var.app_name}-default-stage"
   }
 }
-
-
