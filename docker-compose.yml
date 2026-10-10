@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # MySQL/MariaDB - Base de datos
+  db:
+    image: mariadb:11-alpine  # Alpine = 10x más rápido
+    container_name: elegance-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: elegance_users
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - elegance-network
+    restart: unless-stopped
+
+  # User Service (Puerto 8082)
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.user-service
+    container_name: elegance-user-service
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=elegance_users
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/}
+      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
+    ports:
+      - "8082:8082"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - elegance-network
+    restart: unless-stopped
+
+  # Appointment Service (Puerto 8081)
+  appointment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.appointment-service
+    container_name: elegance-appointment-service
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=elegance_appointments
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+    ports:
+      - "8081:8081"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - elegance-network
+    restart: unless-stopped
+
+  # Notification Service (Puerto 8083)
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.notification-service
+    container_name: elegance-notification-service
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+    ports:
+      - "8083:8083"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - elegance-network
+    restart: unless-stopped
+
+  # Services & Rates Service (Puerto 8084)
+  services-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.services-service
+    container_name: elegance-services-service
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=elegance_services
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/}
+      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
+    ports:
+      - "8084:8084"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - elegance-network
+    restart: unless-stopped
+
+volumes:
+  db_data:
+
+networks:
+  elegance-network:
+    driver: bridge

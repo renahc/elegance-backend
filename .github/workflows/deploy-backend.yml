@@ -2,84 +2,173 @@ name: Deploy Backend (Spring Boot) to AWS EC2
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - 'Develop/Microservicios'
+  pull_request:
+    branches:
+      - 'Develop/Microservicios'
 
 jobs:
-  build-and-deploy:
+  deploy-to-ec2:
+    name: Deploy to EC2
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup JDK 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
           java-version: '17'
-          cache: 'maven'
+          distribution: 'temurin'
+          cache: maven
 
-      - name: Build Spring Boot JAR Package
-        run: mvn clean package -DskipTests
+      - name: Build JARs with Maven
+        run: |
+          cd elegance-backend-parent
+          chmod +x ./mvnw
+          ./mvnw clean package -DskipTests
 
-      - name: Prepare staging directory via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.AWS_EC2_HOST }}
-          username: ${{ secrets.AWS_EC2_USERNAME }}
-          key: ${{ secrets.AWS_EC2_SSH_KEY }}
-          script: |
-            mkdir -p /home/ubuntu/backend-build
-            rm -rf /home/ubuntu/backend-build/*
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
-      - name: Deploy JAR file to EC2 home folder via SCP
-        uses: appleboy/scp-action@v0.1.7
+      - name: Terminate Any Existing Backend EC2 Instances in AWS (Prevent Instance Creep)
+        run: |
+          echo "🔍 Buscando instancias EC2 backend activas..."
+          EXISTING_IDS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=elegance-backend-ec2,elegance-ec2,elegance-rabbitmq-ec2" "Name=instance-state-name,Values=running,pending,stopped" \
+            --query "Reservations[*].Instances[*].InstanceId" \
+            --output text)
+
+          if [ -n "$EXISTING_IDS" ]; then
+            echo "🗑️ Destruyendo instancias previas en AWS: $EXISTING_IDS"
+            aws ec2 terminate-instances --instance-ids $EXISTING_IDS
+            echo "⏳ Esperando terminación..."
+            aws ec2 wait instance-terminated --instance-ids $EXISTING_IDS
+            echo "✅ Instancias previas destruidas."
+          else
+            echo "ℹ️ No se encontraron instancias previas."
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          host: ${{ secrets.AWS_EC2_HOST }}
-          username: ${{ secrets.AWS_EC2_USERNAME }}
-          key: ${{ secrets.AWS_EC2_SSH_KEY }}
-          source: "target/salon-backend.jar"
-          target: "/home/ubuntu/backend-build"
-          strip_components: 1
-          rm: false
+          terraform_version: 1.9.8
 
-      - name: Deploy JAR and Setup Spring Boot Service via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.AWS_EC2_HOST }}
-          username: ${{ secrets.AWS_EC2_USERNAME }}
-          key: ${{ secrets.AWS_EC2_SSH_KEY }}
-          script: |
-            # Install Java 17 JRE if missing
-            which java || (sudo apt-get update -y && sudo apt-get install -y openjdk-17-jre-headless)
+      - name: Terraform Init
+        working-directory: ./infra/terraform
+        run: terraform init
 
-            # Copy JAR to /opt/salon-backend
-            sudo mkdir -p /opt/salon-backend
-            sudo cp /home/ubuntu/backend-build/salon-backend.jar /opt/salon-backend/app.jar
-            sudo chown -R ubuntu:ubuntu /opt/salon-backend
+      - name: Terraform Apply
+        working-directory: ./infra/terraform
+        env:
+          TF_VAR_db_password: ${{ secrets.TEST_DB_PASSWORD }}
+          TF_VAR_mail_username: ${{ secrets.MAIL_USERNAME }}
+          TF_VAR_mail_password: ${{ secrets.MAIL_PASSWORD }}
+        run: terraform apply -auto-approve
 
-            # Create systemd service unit if missing
-            sudo tee /etc/systemd/system/salon-backend.service > /dev/null << 'EOF'
-            [Unit]
-            Description=Élégance Salon Spring Boot Backend REST API Service
-            After=syslog.target network.target
+      - name: Get EC2 connection data from Terraform outputs
+        working-directory: ./infra/terraform
+        run: |
+          echo "EC2_HOST=$(terraform output -raw ec2_public_ip)" >> $GITHUB_ENV
+          echo "RABBITMQ_HOST=$(terraform output -raw rabbitmq_public_ip)" >> $GITHUB_ENV
+          echo "API_GATEWAY_URL=$(terraform output -raw api_gateway_url)" >> $GITHUB_ENV
+          terraform output -raw ec2_private_key_pem > /tmp/key.pem
+          chmod 600 /tmp/key.pem
 
-            [Service]
-            User=ubuntu
-            WorkingDirectory=/opt/salon-backend
-            ExecStart=/usr/bin/java -jar /opt/salon-backend/app.jar
-            SuccessExitStatus=143
-            TimeoutStopSec=20
-            Restart=always
-            RestartSec=5
+      - name: Wait for EC2 to be ready (Java + MySQL instalados)
+        run: |
+          echo "⏳ Esperando inicialización de la instancia EC2 (${{ env.EC2_HOST }})..."
+          for i in $(seq 1 60); do
+            STATUS=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
+              'cat /opt/elegance/status.txt 2>/dev/null || echo "CONNECTING"' 2>/dev/null || echo "NO_SSH")
 
-            [Install]
-            WantedBy=multi-user.target
-            EOF
+            if [ "$STATUS" = "READY" ]; then
+              echo "✅ EC2 lista y completamente aprovisionada ($i/60)."
+              exit 0
+            elif [[ "$STATUS" == ERROR* ]] || [ "$STATUS" = "FAILED" ]; then
+              echo "❌ Error en el aprovisionamiento de la EC2: $STATUS"
+              break
+            fi
 
-            sudo systemctl daemon-reload
-            sudo systemctl enable salon-backend
-            sudo systemctl restart salon-backend || true
-            sudo systemctl status salon-backend --no-pager || true
+            if [ "$STATUS" = "NO_SSH" ]; then
+              echo "[$i/60] 🔌 Esperando conexión SSH con la instancia..."
+            elif [ "$STATUS" = "BOOTING" ] || [ "$STATUS" = "CONNECTING" ]; then
+              echo "[$i/60] ⚙️ SSH conectado. Instalando Java 17 y MariaDB..."
+            else
+              echo "[$i/60] ⏳ Estado: $STATUS. Verificando servicios..."
+            fi
 
+            sleep 10
+          done
+          echo "❌ La instancia no terminó de prepararse en el tiempo esperado"
+          echo "=== Diagnóstico de inicio (user-data / cloud-init) ==="
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
+            'cat /var/log/user-data.log 2>/dev/null || cat /var/log/cloud-init-output.log 2>/dev/null' || true
+          exit 1
 
+      - name: Wait for RabbitMQ EC2 to be ready
+        run: |
+          echo "⏳ Esperando inicialización del Clúster RabbitMQ (${{ env.RABBITMQ_HOST }})..."
+          for i in $(seq 1 45); do
+            STATUS=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.RABBITMQ_HOST }} \
+              'cat /opt/rabbitmq/status.txt 2>/dev/null || echo "CONNECTING"' 2>/dev/null || echo "NO_SSH")
+
+            echo "[$i/45] Estado actual RabbitMQ: $STATUS"
+
+            if [ "$STATUS" = "READY" ]; then
+              echo "✅ Clúster RabbitMQ de 2 nodos listo y activo ($i/45)."
+              break
+            elif [ "$STATUS" = "FAILED" ]; then
+              echo "⚠️ Error en aprovisionamiento de RabbitMQ, revisando logs:"
+              ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.RABBITMQ_HOST }} \
+                'cat /var/log/user-data-rabbitmq.log 2>/dev/null || true'
+              break
+            fi
+            sleep 6
+          done
+
+      - name: Create .env file with secrets
+        env:
+          DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          AZURE_AD_ISSUER_URI: ${{ secrets.AZURE_AD_ISSUER_URI }}
+          AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+        run: |
+          printf 'DB_PASSWORD="%s"\nMAIL_USERNAME="%s"\nMAIL_PASSWORD="%s"\nAZURE_AD_ISSUER_URI="%s"\nAZURE_AD_CLIENT_ID="%s"\nSPRING_RABBITMQ_HOST="%s"\nSPRING_RABBITMQ_PORT="5672"\nSPRING_RABBITMQ_USERNAME="admin"\nSPRING_RABBITMQ_PASSWORD="admin123"\n' \
+            "$DB_PASSWORD" "$MAIL_USERNAME" "$MAIL_PASSWORD" "$AZURE_AD_ISSUER_URI" "$AZURE_AD_CLIENT_ID" "$RABBITMQ_HOST" > /tmp/.env
+
+      - name: Upload JARs, .env y restart.sh a la EC2
+        run: |
+          scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
+            elegance-backend-parent/elegance-user-service/target/elegance-user-service-1.0.0-SNAPSHOT.jar \
+            ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-user-service.jar
+          scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
+            elegance-backend-parent/elegance-appointment-service/target/elegance-appointment-service-1.0.0-SNAPSHOT.jar \
+            ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-appointment-service.jar
+          scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
+            elegance-backend-parent/elegance-notification-service/target/elegance-notification-service-1.0.0-SNAPSHOT.jar \
+            ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-notification-service.jar
+          if [ -f elegance-backend-parent/elegance-services-service/target/elegance-services-service-1.0.0-SNAPSHOT.jar ]; then
+            scp -o StrictHostKeyChecking=no -i /tmp/key.pem \
+              elegance-backend-parent/elegance-services-service/target/elegance-services-service-1.0.0-SNAPSHOT.jar \
+              ec2-user@${{ env.EC2_HOST }}:/opt/elegance/elegance-services-service.jar
+          fi
+          scp -o StrictHostKeyChecking=no -i /tmp/key.pem /tmp/.env ec2-user@${{ env.EC2_HOST }}:/opt/elegance/.env
+          if [ -f scripts/restart.sh ]; then
+            scp -o StrictHostKeyChecking=no -i /tmp/key.pem scripts/restart.sh ec2-user@${{ env.EC2_HOST }}:/opt/elegance/restart.sh
+          elif [ -f infra/terraform/scripts/restart.sh ]; then
+            scp -o StrictHostKeyChecking=no -i /tmp/key.pem infra/terraform/scripts/restart.sh ec2-user@${{ env.EC2_HOST }}:/opt/elegance/restart.sh
+          fi
+
+      - name: Restart services
+        run: |
+          ssh -o StrictHostKeyChecking=no -i /tmp/key.pem ec2-user@${{ env.EC2_HOST }} \
+            'chmod 600 /opt/elegance/.env && bash /opt/elegance/restart.sh && sleep 8 && head -n 25 /opt/elegance/user.log 2>/dev/null || true'
