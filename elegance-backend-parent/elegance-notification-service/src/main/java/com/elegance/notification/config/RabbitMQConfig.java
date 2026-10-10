@@ -1,6 +1,7 @@
 package com.elegance.notification.config;
 
 import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
@@ -10,9 +11,6 @@ import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.retry.backoff.FixedBackOffPolicy;
-import org.springframework.retry.policy.SimpleRetryPolicy;
-import org.springframework.retry.support.RetryTemplate;
 
 @Configuration
 public class RabbitMQConfig {
@@ -94,20 +92,14 @@ public class RabbitMQConfig {
         factory.setMessageConverter(jsonMessageConverter);
         factory.setDefaultRequeueRejected(false);
 
-        // Política de reintentos: 3 intentos espaciados por 1 segundo
-        RetryTemplate retryTemplate = new RetryTemplate();
-
-        SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy();
-        retryPolicy.setMaxAttempts(3);
-        retryTemplate.setRetryPolicy(retryPolicy);
-
-        FixedBackOffPolicy backOffPolicy = new FixedBackOffPolicy();
-        backOffPolicy.setBackOffPeriod(1000L);
-        retryTemplate.setBackOffPolicy(backOffPolicy);
-
-        factory.setRetryTemplate(retryTemplate);
-        // Cuando se agotan los 3 reintentos, descarta sin reencolar para que RabbitMQ lo envíe a la DLQ
-        factory.setRecoveryCallback(new RejectAndDontRequeueRecoverer());
+        // Reintentos automáticos (3 intentos) y desvío a DLQ mediante RejectAndDontRequeueRecoverer
+        factory.setAdviceChain(
+            RetryInterceptorBuilder.stateless()
+                .maxAttempts(3)
+                .backOffOptions(1000, 1.0, 10000)
+                .recoverer(new RejectAndDontRequeueRecoverer())
+                .build()
+        );
 
         return factory;
     }
