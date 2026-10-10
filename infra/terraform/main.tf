@@ -267,89 +267,62 @@ resource "aws_instance" "elegance_rabbitmq_ec2" {
     systemctl start docker
     usermod -a -G docker ec2-user
 
-    echo "[$(date)] Instalando Docker Compose..."
-    mkdir -p /usr/local/bin
-    curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-    ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+    echo "[$(date)] Creando red Docker interna..."
+    docker network create rabbitmq-cluster-net || true
 
-    cd /opt/rabbitmq
+    COOKIE="ELEGANCE_CLUSTER_SECRET_COOKIE_2026"
 
-    # Configuración para descubrimiento de clúster peer discovery clásico
-    cat <<'CONF' > rabbitmq-cluster.conf
-loopback_users.guest = false
-listeners.tcp.default = 5672
-management.tcp.port = 15672
-cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config
-cluster_formation.classic_config.nodes.1 = rabbit@rabbitmq1
-cluster_formation.classic_config.nodes.2 = rabbit@rabbitmq2
-CONF
-    chmod 644 rabbitmq-cluster.conf
+    # 1. Iniciar Nodo 1 (rabbitmq1)
+    echo "[$(date)] Iniciando contenedor rabbitmq1..."
+    docker run -d \
+      --name rabbitmq1 \
+      --hostname rabbitmq1 \
+      --network rabbitmq-cluster-net \
+      --restart unless-stopped \
+      -p 5672:5672 \
+      -p 15672:15672 \
+      -e RABBITMQ_ERLANG_COOKIE=$COOKIE \
+      -e RABBITMQ_DEFAULT_USER=admin \
+      -e RABBITMQ_DEFAULT_PASS=admin123 \
+      rabbitmq:3.13-management-alpine
 
-    # Docker Compose con 2 nodos en clúster
-    cat <<'COMPOSE' > docker-compose.yml
-version: '3.8'
-
-services:
-  rabbitmq1:
-    image: rabbitmq:3.13-management-alpine
-    container_name: rabbitmq1
-    hostname: rabbitmq1
-    restart: unless-stopped
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_ERLANG_COOKIE=ELEGANCE_CLUSTER_SECRET_COOKIE_2026
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=admin123
-    volumes:
-      - rabbitmq1_data:/var/lib/rabbitmq
-      - ./rabbitmq-cluster.conf:/etc/rabbitmq/rabbitmq.conf:ro
-    networks:
-      - rabbitmq_cluster_net
-
-  rabbitmq2:
-    image: rabbitmq:3.13-management-alpine
-    container_name: rabbitmq2
-    hostname: rabbitmq2
-    restart: unless-stopped
-    ports:
-      - "5673:5672"
-      - "15673:15672"
-    environment:
-      - RABBITMQ_ERLANG_COOKIE=ELEGANCE_CLUSTER_SECRET_COOKIE_2026
-    volumes:
-      - rabbitmq2_data:/var/lib/rabbitmq
-      - ./rabbitmq-cluster.conf:/etc/rabbitmq/rabbitmq.conf:ro
-    depends_on:
-      - rabbitmq1
-    networks:
-      - rabbitmq_cluster_net
-
-volumes:
-  rabbitmq1_data:
-  rabbitmq2_data:
-
-networks:
-  rabbitmq_cluster_net:
-    driver: bridge
-COMPOSE
-
-    chown -R ec2-user:ec2-user /opt/rabbitmq
-    docker-compose up -d
-
-    echo "[$(date)] Esperando a que el clúster RabbitMQ responda en el puerto 15672..."
+    echo "[$(date)] Esperando que rabbitmq1 esté listo..."
     for i in $(seq 1 40); do
-      if curl -s -u admin:admin123 http://localhost:15672/api/overview >/dev/null 2>&1; then
-        echo "READY" > $STATUS_FILE
-        echo "[$(date)] === Clúster RabbitMQ de 2 Nodos listo y activo ==="
-        exit 0
+      if docker exec rabbitmq1 rabbitmqctl status >/dev/null 2>&1; then
+        echo "[$(date)] rabbitmq1 listo."
+        break
       fi
-      sleep 3
+      sleep 2
+    done
+
+    # 2. Iniciar Nodo 2 (rabbitmq2)
+    echo "[$(date)] Iniciando contenedor rabbitmq2..."
+    docker run -d \
+      --name rabbitmq2 \
+      --hostname rabbitmq2 \
+      --network rabbitmq-cluster-net \
+      --restart unless-stopped \
+      -p 5673:5672 \
+      -p 15673:15672 \
+      -e RABBITMQ_ERLANG_COOKIE=$COOKIE \
+      rabbitmq:3.13-management-alpine
+
+    echo "[$(date)] Esperando que rabbitmq2 esté listo para unirlo al clúster..."
+    for i in $(seq 1 40); do
+      if docker exec rabbitmq2 rabbitmqctl status >/dev/null 2>&1; then
+        echo "[$(date)] Uniendo rabbitmq2 al clúster rabbit@rabbitmq1..."
+        docker exec rabbitmq2 rabbitmqctl stop_app
+        docker exec rabbitmq2 rabbitmqctl reset
+        docker exec rabbitmq2 rabbitmqctl join_cluster rabbit@rabbitmq1
+        docker exec rabbitmq2 rabbitmqctl start_app
+        echo "[$(date)] rabbitmq2 unido exitosamente al clúster!"
+        break
+      fi
+      sleep 2
     done
 
     echo "READY" > $STATUS_FILE
+    echo "[$(date)] === Clúster RabbitMQ de 2 Nodos completamente activo y listo ==="
   EOF
   )
 

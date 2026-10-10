@@ -120,11 +120,15 @@ jobs:
             STATUS=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.RABBITMQ_HOST }} \
               'cat /opt/rabbitmq/status.txt 2>/dev/null || echo "CONNECTING"' 2>/dev/null || echo "NO_SSH")
 
+            echo "[$i/45] Estado actual RabbitMQ: $STATUS"
+
             if [ "$STATUS" = "READY" ]; then
-              echo "✅ Clúster RabbitMQ listo y activo ($i/45)."
+              echo "✅ Clúster RabbitMQ de 2 nodos listo y activo ($i/45)."
               break
             elif [ "$STATUS" = "FAILED" ]; then
-              echo "⚠️ Error en aprovisionamiento de RabbitMQ, continuando..."
+              echo "⚠️ Error en aprovisionamiento de RabbitMQ, revisando logs:"
+              ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i /tmp/key.pem ec2-user@${{ env.RABBITMQ_HOST }} \
+                'cat /var/log/user-data-rabbitmq.log 2>/dev/null || true'
               break
             fi
             sleep 6
