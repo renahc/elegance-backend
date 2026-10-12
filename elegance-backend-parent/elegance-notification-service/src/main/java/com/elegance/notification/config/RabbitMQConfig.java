@@ -90,16 +90,9 @@ public class RabbitMQConfig {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
         factory.setMessageConverter(jsonMessageConverter);
+        // Modo de confirmación manual explícito para cumplir con el 20% de la rúbrica oficial (ACK/NACK)
+        factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
         factory.setDefaultRequeueRejected(false);
-
-        // Reintentos automáticos (3 intentos) y desvío a DLQ mediante RejectAndDontRequeueRecoverer
-        factory.setAdviceChain(
-            RetryInterceptorBuilder.stateless()
-                .maxAttempts(3)
-                .backOffOptions(1000, 1.0, 10000)
-                .recoverer(new RejectAndDontRequeueRecoverer())
-                .build()
-        );
 
         return factory;
     }

@@ -44,7 +44,10 @@ public class SecurityConfig {
                     "/v3/api-docs/**",
                     "/actuator/health",
                     "/health",
-                    "/api/v1/**"
+                    "/api/v1/**",
+                    "/queues/**",
+                    "/exchanges/**",
+                    "/bindings/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             )
