@@ -108,9 +108,9 @@ public class RabbitAdminService {
     /**
      * Purga todos los mensajes pendientes de una cola.
      */
-    public int purgeQueue(String queueName) {
+    public void purgeQueue(String queueName) {
         log.info("Purgando mensajes en la cola: {}", queueName);
-        return rabbitAdmin.purgeQueue(queueName, false);
+        rabbitAdmin.purgeQueue(queueName, false);
     }
 
     /**

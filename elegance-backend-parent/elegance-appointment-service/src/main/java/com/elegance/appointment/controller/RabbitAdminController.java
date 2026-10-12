@@ -96,14 +96,13 @@ public class RabbitAdminController {
             @Parameter(description = "Nombre de la cola", example = "appointment.created.queue")
             @PathVariable("name") String name) {
 
-        int purgedCount = rabbitAdminService.purgeQueue(name);
+        rabbitAdminService.purgeQueue(name);
 
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", Instant.now().toString());
         response.put("status", HttpStatus.OK.value());
         response.put("message", "Cola purgada exitosamente");
         response.put("queueName", name);
-        response.put("purgedMessages", purgedCount);
 
         return ResponseEntity.ok(response);
     }
