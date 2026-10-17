@@ -16,6 +16,7 @@ public class RabbitMQConfig {
     // Exchanges
     public static final String DIRECT_EXCHANGE = "elegance.direct.exchange";
     public static final String DLX_EXCHANGE = "elegance.dlx.exchange";
+    public static final String TOPIC_EXCHANGE = "elegance.topic.exchange";
 
     // Colas Principales y DLQs
     public static final String APPOINTMENT_CREATED_QUEUE = "appointment.created.queue";
@@ -31,7 +32,7 @@ public class RabbitMQConfig {
     public static final String NOTIFICATION_SEND_RK = "notification.send";
 
     // ========================================================
-    // 1. EXCHANGES (Direct y Dead Letter Exchange)
+    // 1. EXCHANGES (Direct, Dead Letter Exchange y Topic Exchange)
     // ========================================================
     @Bean
     public DirectExchange directExchange() {
@@ -41,6 +42,11 @@ public class RabbitMQConfig {
     @Bean
     public DirectExchange dlxExchange() {
         return new DirectExchange(DLX_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public TopicExchange topicExchange() {
+        return new TopicExchange(TOPIC_EXCHANGE, true, false);
     }
 
     // ========================================================

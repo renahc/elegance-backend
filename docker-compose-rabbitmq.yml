@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Nodo 1 del Clúster RabbitMQ
+  rabbitmq1:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq1
+    hostname: rabbitmq1
+    restart: unless-stopped
+    ports:
+      - "5672:5672"     # AMQP Protocol
+      - "15672:15672"   # Management Web UI (Nodo 1)
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=ELEGANCE_CLUSTER_SECRET_COOKIE_2026
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    volumes:
+      - rabbitmq1_data:/var/lib/rabbitmq
+    networks:
+      - rabbitmq-cluster-net
+
+  # Nodo 2 del Clúster RabbitMQ
+  rabbitmq2:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq2
+    hostname: rabbitmq2
+    restart: unless-stopped
+    ports:
+      - "5673:5672"     # AMQP Protocol (Nodo 2)
+      - "15673:15672"   # Management Web UI (Nodo 2)
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=ELEGANCE_CLUSTER_SECRET_COOKIE_2026
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    volumes:
+      - rabbitmq2_data:/var/lib/rabbitmq
+    depends_on:
+      - rabbitmq1
+    networks:
+      - rabbitmq-cluster-net
+
+volumes:
+  rabbitmq1_data:
+  rabbitmq2_data:
+
+networks:
+  rabbitmq-cluster-net:
+    driver: bridge
