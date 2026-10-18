@@ -1,49 +1,35 @@
 #!/bin/bash
-# ==========================================
-# RESTART SCRIPT - Élégance Backend
-# ==========================================
+cd /opt/elegance
 
-set -e
-
-APP_DIR="/opt/elegance"
-LOG_DIR="/opt/elegance"
-
-echo "🔄 Deteniendo servicios existentes..."
-pkill -f elegance-user-service.jar || true
-pkill -f elegance-appointment-service.jar || true
-pkill -f elegance-notification-service.jar || true
-pkill -f elegance-services-service.jar || true
-sleep 3
-
-echo "📦 Cargando variables de entorno desde .env..."
-# IMPORTANTE: Exportar todas las variables del .env
-set -a
-source /opt/elegance/.env
-set +a
-
-echo "🚀 Iniciando User Service (puerto 8082)..."
-nohup java -jar $APP_DIR/elegance-user-service.jar \
-  > $LOG_DIR/user.log 2>&1 &
-
-echo "🚀 Iniciando Appointment Service (puerto 8081)..."
-nohup java -jar $APP_DIR/elegance-appointment-service.jar \
-  > $LOG_DIR/appointment.log 2>&1 &
-
-echo "🚀 Iniciando Notification Service (puerto 8083)..."
-nohup java -jar $APP_DIR/elegance-notification-service.jar \
-  > $LOG_DIR/notification.log 2>&1 &
-
-if [ -f $APP_DIR/elegance-services-service.jar ]; then
-  echo "🚀 Iniciando Services Service (puerto 8084)..."
-  nohup java -jar $APP_DIR/elegance-services-service.jar \
-    > $LOG_DIR/services.log 2>&1 &
+# 1. Cargar variables del .env si existe
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
 fi
 
-echo "✅ Servicios iniciados. Esperando 10 segundos..."
-sleep 10
+# 2. Detener servicios anteriores
+pkill -f "elegance-.*-service"
+sleep 3
 
-echo "📋 Logs de Appointment Service (últimas 30 líneas):"
-tail -n 30 $LOG_DIR/appointment.log || true
+# 3. Variables por defecto si no están en el .env
+RABBIT_HOST=${SPRING_RABBITMQ_HOST:-98.80.6.181} # <--- CAMBIA ESTA IP SI ES NECESARIO
+RABBIT_PORT=${SPRING_RABBITMQ_PORT:-5672}
+RABBIT_USER=${SPRING_RABBITMQ_USERNAME:-admin}
+RABBIT_PASS=${SPRING_RABBITMQ_PASSWORD:-admin123}
 
-echo "📋 Variables de entorno RabbitMQ cargadas:"
-env | grep RABBIT || echo "⚠️ No se encontraron variables RABBIT"
+DB_PASS=${DB_PASSWORD:-testpassword123}
+TENANT_ID="7607c5a6-994c-4951-92bc-3af0cf3eb713"
+CLIENT_ID="304d54f7-d485-478a-a1ea-0c2f874b0c1f"
+ISSUER_URI="https://sts.windows.net/${TENANT_ID}/"
+
+echo "🚀 Iniciando servicios con RabbitMQ en: $RABBIT_HOST"
+
+# 4. Iniciar con logs
+nohup java -Xmx256m -jar -Dserver.port=8082 -Dspring.datasource.url="jdbc:mysql://localhost:3306/elegance_users?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" -Dspring.datasource.username=root -Dspring.datasource.password=$DB_PASS -Dazure.activedirectory.tenant-id=$TENANT_ID -Dazure.activedirectory.issuer-uri=$ISSUER_URI -Dazure.activedirectory.client-id=$CLIENT_ID -Dspring.rabbitmq.host=$RABBIT_HOST -Dspring.rabbitmq.port=$RABBIT_PORT -Dspring.rabbitmq.username=$RABBIT_USER -Dspring.rabbitmq.password=$RABBIT_PASS elegance-user-service.jar > user.log 2>&1 &
+
+nohup java -Xmx256m -jar -Dserver.port=8084 -Dspring.datasource.url="jdbc:mysql://localhost:3306/elegance_services?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" -Dspring.datasource.username=root -Dspring.datasource.password=$DB_PASS -Dazure.activedirectory.tenant-id=$TENANT_ID -Dazure.activedirectory.issuer-uri=$ISSUER_URI -Dazure.activedirectory.client-id=$CLIENT_ID -Dspring.rabbitmq.host=$RABBIT_HOST -Dspring.rabbitmq.port=$RABBIT_PORT -Dspring.rabbitmq.username=$RABBIT_USER -Dspring.rabbitmq.password=$RABBIT_PASS elegance-services-service.jar > services.log 2>&1 &
+
+nohup java -Xmx256m -jar -Dserver.port=8081 -Dspring.datasource.url="jdbc:mysql://localhost:3306/elegance_appointments?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" -Dspring.datasource.username=root -Dspring.datasource.password=$DB_PASS -Dazure.activedirectory.tenant-id=$TENANT_ID -Dazure.activedirectory.issuer-uri=$ISSUER_URI -Dazure.activedirectory.client-id=$CLIENT_ID -Dspring.rabbitmq.host=$RABBIT_HOST -Dspring.rabbitmq.port=$RABBIT_PORT -Dspring.rabbitmq.username=$RABBIT_USER -Dspring.rabbitmq.password=$RABBIT_PASS elegance-appointment-service.jar > appointment.log 2>&1 &
+
+nohup java -Xmx256m -jar -Dserver.port=8083 -Dspring.mail.username=gabrielgamer498@gmail.com -Dspring.mail.password="jnkn ieyh mynf xsdz" -Dazure.activedirectory.tenant-id=$TENANT_ID -Dazure.activedirectory.issuer-uri=$ISSUER_URI -Dazure.activedirectory.client-id=$CLIENT_ID -Dspring.rabbitmq.host=$RABBIT_HOST -Dspring.rabbitmq.port=$RABBIT_PORT -Dspring.rabbitmq.username=$RABBIT_USER -Dspring.rabbitmq.password=$RABBIT_PASS elegance-notification-service.jar > notification.log 2>&1 &
+
+echo "✅ Servicios iniciados. Revisa los archivos .log para ver el estado."
