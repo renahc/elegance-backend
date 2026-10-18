@@ -1,3 +1,6 @@
+# ==========================================
+# OUTPUTS: EC2 Backend
+# ==========================================
 output "ec2_public_ip" {
   description = "IP pública de la instancia EC2 de Backend"
   value       = aws_instance.elegance_ec2.public_ip
@@ -14,19 +17,20 @@ output "ec2_private_key_pem" {
   sensitive   = true
 }
 
+# ==========================================
+# OUTPUTS: API Gateway
+# ==========================================
 output "api_gateway_url" {
   description = "URL base del API Gateway HTTP para invocar microservicios"
   value       = aws_apigatewayv2_stage.default.invoke_url
 }
 
+# ==========================================
+# OUTPUTS: RabbitMQ
+# ==========================================
 output "rabbitmq_public_ip" {
-  description = "Public IP of RabbitMQ instance"
-  value       = aws_instance.rabbitmq.public_ip
-}
-
-output "backend_public_ip" {
-  description = "Public IP of Backend instance"
-  value       = aws_instance.backend.public_ip
+  description = "IP pública de la instancia EC2 de RabbitMQ"
+  value       = aws_instance.elegance_rabbitmq_ec2.public_ip
 }
 
 output "rabbitmq_dashboard_url" {
