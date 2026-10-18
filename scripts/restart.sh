@@ -53,8 +53,9 @@ nohup $JAVA_CMD -Xmx256m -jar -Dserver.port=8082 \
   -Dspring.datasource.url="jdbc:mysql://localhost:3306/elegance_users?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
   -Dspring.datasource.username=root \
   -Dspring.datasource.password="${DB_PASSWORD:-}" \
-  -Dazure.activedirectory.issuer-uri="${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}" \
-  -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
+  -Dazure.activedirectory.tenant-id="${AZURE_AD_TENANT_ID:-7607c5a6-994c-4951-92bc-3af0cf3eb713}" \
+  -Dazure.activedirectory.issuer-uri="${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/7607c5a6-994c-4951-92bc-3af0cf3eb713/v2.0}" \
+  -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
   elegance-user-service.jar </dev/null > user.log 2>&1 &
 
 # 2. Appointment Service (Puerto 8081 - Publicador RabbitMQ)
@@ -62,8 +63,9 @@ nohup $JAVA_CMD -Xmx256m -jar -Dserver.port=8081 \
   -Dspring.datasource.url="jdbc:mysql://localhost:3306/elegance_appointments?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
   -Dspring.datasource.username=root \
   -Dspring.datasource.password="${DB_PASSWORD:-}" \
-  -Dazure.activedirectory.issuer-uri="${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}" \
-  -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
+  -Dazure.activedirectory.tenant-id="${AZURE_AD_TENANT_ID:-7607c5a6-994c-4951-92bc-3af0cf3eb713}" \
+  -Dazure.activedirectory.issuer-uri="${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/7607c5a6-994c-4951-92bc-3af0cf3eb713/v2.0}" \
+  -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
   -Dspring.rabbitmq.host="${SPRING_RABBITMQ_HOST:-localhost}" \
   -Dspring.rabbitmq.port="${SPRING_RABBITMQ_PORT:-5672}" \
   -Dspring.rabbitmq.username="${SPRING_RABBITMQ_USERNAME:-admin}" \
@@ -74,8 +76,9 @@ nohup $JAVA_CMD -Xmx256m -jar -Dserver.port=8081 \
 nohup $JAVA_CMD -Xmx256m -jar -Dserver.port=8083 \
   -Dspring.mail.username="${MAIL_USERNAME:-}" \
   -Dspring.mail.password="${MAIL_PASSWORD:-}" \
-  -Dazure.activedirectory.issuer-uri="${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}" \
-  -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
+  -Dazure.activedirectory.tenant-id="${AZURE_AD_TENANT_ID:-7607c5a6-994c-4951-92bc-3af0cf3eb713}" \
+  -Dazure.activedirectory.issuer-uri="${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/7607c5a6-994c-4951-92bc-3af0cf3eb713/v2.0}" \
+  -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
   -Dspring.rabbitmq.host="${SPRING_RABBITMQ_HOST:-localhost}" \
   -Dspring.rabbitmq.port="${SPRING_RABBITMQ_PORT:-5672}" \
   -Dspring.rabbitmq.username="${SPRING_RABBITMQ_USERNAME:-admin}" \
@@ -88,8 +91,9 @@ if [ -f elegance-services-service.jar ]; then
     -Dspring.datasource.url="jdbc:mysql://localhost:3306/elegance_services?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
     -Dspring.datasource.username=root \
     -Dspring.datasource.password="${DB_PASSWORD:-}" \
-    -Dazure.activedirectory.issuer-uri="${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}" \
-    -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
+    -Dazure.activedirectory.tenant-id="${AZURE_AD_TENANT_ID:-7607c5a6-994c-4951-92bc-3af0cf3eb713}" \
+    -Dazure.activedirectory.issuer-uri="${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/7607c5a6-994c-4951-92bc-3af0cf3eb713/v2.0}" \
+    -Dazure.activedirectory.client-id="${AZURE_AD_CLIENT_ID:-304d54f7-d485-478a-a1ea-0c2f874b0c1f}" \
     elegance-services-service.jar </dev/null > services.log 2>&1 &
 fi
 
