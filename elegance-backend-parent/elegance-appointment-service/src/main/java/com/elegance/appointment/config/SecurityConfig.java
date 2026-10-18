@@ -25,10 +25,10 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Value("${azure.activedirectory.issuer-uri:https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/}")
+    @Value("${azure.activedirectory.issuer-uri:https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}")
     private String issuerUri;
     
-    @Value("${azure.activedirectory.client-id:api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}")
+    @Value("${azure.activedirectory.client-id:304d54f7-d485-478a-a1ea-0c2f874b0c1f}")
     private String audience;
 
     @Bean
@@ -87,7 +87,9 @@ public class SecurityConfig {
         @Override
         public OAuth2TokenValidatorResult validate(Jwt jwt) {
             OAuth2Error error = new OAuth2Error("invalid_token", "The required audience is missing", null);
-            if (jwt.getAudience().contains(audience)) {
+            if (jwt.getAudience().contains(audience) ||
+                jwt.getAudience().contains("304d54f7-d485-478a-a1ea-0c2f874b0c1f") ||
+                jwt.getAudience().contains("api://304d54f7-d485-478a-a1ea-0c2f874b0c1f")) {
                 return OAuth2TokenValidatorResult.success();
             }
             return OAuth2TokenValidatorResult.failure(error);

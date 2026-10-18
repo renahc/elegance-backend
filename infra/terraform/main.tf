@@ -361,10 +361,10 @@ resource "aws_apigatewayv2_authorizer" "azure_ad_auth" {
 
   jwt_configuration {
     audience = [
-      "413ae20f-d59e-4b81-8864-97d5945f7d5f",
+      "304d54f7-d485-478a-a1ea-0c2f874b0c1f",
       "api://304d54f7-d485-478a-a1ea-0c2f874b0c1f"
     ]
-    issuer = "https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/"
+    issuer = "https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/"
   }
 }
 
