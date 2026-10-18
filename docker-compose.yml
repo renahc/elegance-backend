@@ -35,8 +35,8 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-root}
       - MAIL_USERNAME=${MAIL_USERNAME:-}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-}
-      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
-      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
+      - AZURE_AD_ISSUER_URI=https://login.microsoftonline.com/7607c5a6-994c-4951-92bc-3af0cf3eb713/v2.0
+      - AZURE_AD_CLIENT_ID=api://304d54f7-d485-478a-a1ea-0c2f874b0c1f
     ports:
       - "8082:8082"
     depends_on:
@@ -53,6 +53,8 @@ services:
       dockerfile: Dockerfile.appointment-service
     container_name: elegance-appointment-service
     environment:
+      - AZURE_AD_ISSUER_URI=https://login.microsoftonline.com/7607c5a6-994c-4951-92bc-3af0cf3eb713/v2.0
+      - AZURE_AD_CLIENT_ID=api://304d54f7-d485-478a-a1ea-0c2f874b0c1f
       - DB_HOST=db
       - DB_PORT=3306
       - DB_NAME=elegance_appointments
@@ -76,6 +78,8 @@ services:
       dockerfile: Dockerfile.notification-service
     container_name: elegance-notification-service
     environment:
+      - AZURE_AD_ISSUER_URI=https://login.microsoftonline.com/7607c5a6-994c-4951-92bc-3af0cf3eb713/v2.0
+      - AZURE_AD_CLIENT_ID=api://304d54f7-d485-478a-a1ea-0c2f874b0c1f
       - DB_HOST=db
       - DB_PORT=3306
       - DB_USER=root

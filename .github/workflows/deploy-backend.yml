@@ -141,9 +141,13 @@ jobs:
           MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
           AZURE_AD_ISSUER_URI: ${{ secrets.AZURE_AD_ISSUER_URI }}
           AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+          RABBITMQ_HOST: ${{ env.RABBITMQ_HOST }}  # ← AGREGAR ESTA LÍNEA
         run: |
           printf 'DB_PASSWORD="%s"\nMAIL_USERNAME="%s"\nMAIL_PASSWORD="%s"\nAZURE_AD_ISSUER_URI="%s"\nAZURE_AD_CLIENT_ID="%s"\nSPRING_RABBITMQ_HOST="%s"\nSPRING_RABBITMQ_PORT="5672"\nSPRING_RABBITMQ_USERNAME="admin"\nSPRING_RABBITMQ_PASSWORD="admin123"\n' \
             "$DB_PASSWORD" "$MAIL_USERNAME" "$MAIL_PASSWORD" "$AZURE_AD_ISSUER_URI" "$AZURE_AD_CLIENT_ID" "$RABBITMQ_HOST" > /tmp/.env
+          
+          echo "✅ .env generado con RabbitMQ en: $RABBITMQ_HOST"
+          cat /tmp/.env
 
       - name: Upload JARs, .env y restart.sh a la EC2
         run: |

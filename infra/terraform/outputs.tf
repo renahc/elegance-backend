@@ -20,8 +20,13 @@ output "api_gateway_url" {
 }
 
 output "rabbitmq_public_ip" {
-  description = "IP pública de la instancia EC2 del Clúster RabbitMQ"
-  value       = aws_instance.elegance_rabbitmq_ec2.public_ip
+  description = "Public IP of RabbitMQ instance"
+  value       = aws_instance.rabbitmq.public_ip
+}
+
+output "backend_public_ip" {
+  description = "Public IP of Backend instance"
+  value       = aws_instance.backend.public_ip
 }
 
 output "rabbitmq_dashboard_url" {
