@@ -3,10 +3,10 @@ name: Deploy Backend (Spring Boot) to AWS EC2
 on:
   push:
     branches:
-      - 'Develop/Microservicios'
+      - 'feature/rabbitmq-domain-events'
   pull_request:
     branches:
-      - 'Develop/Microservicios'
+      - 'feature/rabbitmq-domain-events'
 
 jobs:
   deploy-to-ec2:
