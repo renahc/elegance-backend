@@ -6,11 +6,11 @@ import com.elegance.service.repository.ServiceRepository;
 import com.elegance.service.event.ServiceCreatedEvent;
 import com.elegance.service.event.ServiceUpdatedEvent;
 import com.elegance.service.event.ServiceDeletedEvent;
+import com.elegance.service.service.ServiceEventPublisher;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -25,10 +25,10 @@ import java.util.UUID;
 public class ServiceController {
 
     private final ServiceRepository serviceRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final ServiceEventPublisher eventPublisher;
 
     @Autowired
-    public ServiceController(ServiceRepository serviceRepository, ApplicationEventPublisher eventPublisher) {
+    public ServiceController(ServiceRepository serviceRepository, ServiceEventPublisher eventPublisher) {
         this.serviceRepository = serviceRepository;
         this.eventPublisher = eventPublisher;
     }
@@ -65,7 +65,7 @@ public class ServiceController {
 
         ServiceEntity saved = serviceRepository.save(entity);
 
-        eventPublisher.publishEvent(new ServiceCreatedEvent(saved.getId(), saved.getName(), saved.getDescription(), saved.getBasePrice(), saved.getDurationMinutes(), LocalDateTime.now()));
+        eventPublisher.publishServiceCreated(new ServiceCreatedEvent(saved.getId(), saved.getName(), saved.getDescription(), saved.getBasePrice(), saved.getDurationMinutes(), LocalDateTime.now()));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
@@ -85,7 +85,7 @@ public class ServiceController {
                     }
                     ServiceEntity updated = serviceRepository.save(srv);
 
-                    eventPublisher.publishEvent(new ServiceUpdatedEvent(updated.getId(), updated.getName(), updated.getDescription(), updated.getBasePrice(), updated.getDurationMinutes(), LocalDateTime.now()));
+                    eventPublisher.publishServiceUpdated(new ServiceUpdatedEvent(updated.getId(), updated.getName(), updated.getDescription(), updated.getBasePrice(), updated.getDurationMinutes(), LocalDateTime.now()));
 
                     return ResponseEntity.ok(serviceRepository.save(srv));
                 })
@@ -100,7 +100,7 @@ public class ServiceController {
                     srv.setActive(false);
                     serviceRepository.save(srv);
 
-                    eventPublisher.publishEvent(new ServiceDeletedEvent(srv.getId(), LocalDateTime.now()));
+                    eventPublisher.publishServiceDeleted(new ServiceDeletedEvent(srv.getId(), LocalDateTime.now()));
 
                     return ResponseEntity.noContent().<Void>build();
                 })

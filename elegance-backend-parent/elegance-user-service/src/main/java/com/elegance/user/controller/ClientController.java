@@ -5,10 +5,10 @@ import com.elegance.user.repository.ClientRepository;
 import com.elegance.user.event.UserCreatedEvent;
 import com.elegance.user.event.UserUpdatedEvent;
 import com.elegance.user.event.UserDeletedEvent;
+import com.elegance.user.service.UserEventPublisher;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,10 +23,10 @@ import java.util.UUID;
 public class ClientController {
 
     private final ClientRepository clientRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final UserEventPublisher eventPublisher;
 
     @Autowired
-    public ClientController(ClientRepository clientRepository, ApplicationEventPublisher eventPublisher) {
+    public ClientController(ClientRepository clientRepository, UserEventPublisher eventPublisher) {
         this.clientRepository = clientRepository;
         this.eventPublisher = eventPublisher;
     }
@@ -59,8 +59,8 @@ public class ClientController {
         }
         ClientEntity saved = clientRepository.save(client);
 
-        // Publicar evento después del commit (usa UserCreatedEvent escuchado por UserEventPublisher)
-        eventPublisher.publishEvent(new UserCreatedEvent(saved.getId(), saved.getName(), saved.getEmail(), "CLIENT", LocalDateTime.now()));
+        // Publicar evento mediante UserEventPublisher (AFTER_COMMIT listener en el publisher se encargará)
+        eventPublisher.publishUserCreated(new UserCreatedEvent(saved.getId(), saved.getName(), saved.getEmail(), "CLIENT", LocalDateTime.now()));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
@@ -82,7 +82,7 @@ public class ClientController {
 
                     ClientEntity updated = clientRepository.save(client);
 
-                    eventPublisher.publishEvent(new UserUpdatedEvent(updated.getId(), updated.getName(), updated.getEmail(), "CLIENT", LocalDateTime.now()));
+                    eventPublisher.publishUserUpdated(new UserUpdatedEvent(updated.getId(), updated.getName(), updated.getEmail(), "CLIENT", LocalDateTime.now()));
 
                     return ResponseEntity.ok(updated);
                 })
@@ -94,7 +94,7 @@ public class ClientController {
     public ResponseEntity<Void> deleteClient(@PathVariable String id) {
         if (clientRepository.existsById(id)) {
             clientRepository.deleteById(id);
-            eventPublisher.publishEvent(new UserDeletedEvent(id, LocalDateTime.now()));
+            eventPublisher.publishUserDeleted(new UserDeletedEvent(id, LocalDateTime.now()));
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.notFound().build();
