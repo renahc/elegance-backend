@@ -6,12 +6,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Service
 public class ServiceEventPublisher {
-
     private static final Logger log = LoggerFactory.getLogger(ServiceEventPublisher.class);
     private final RabbitTemplate rabbitTemplate;
     private final String exchange;
