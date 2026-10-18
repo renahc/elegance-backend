@@ -5,10 +5,10 @@ import com.elegance.user.repository.StylistRepository;
 import com.elegance.user.event.StylistCreatedEvent;
 import com.elegance.user.event.StylistUpdatedEvent;
 import com.elegance.user.event.StylistDeletedEvent;
-import com.elegance.user.service.UserEventPublisher;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,10 +23,10 @@ import java.util.UUID;
 public class StylistController {
 
     private final StylistRepository stylistRepository;
-    private final UserEventPublisher eventPublisher;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
-    public StylistController(StylistRepository stylistRepository, UserEventPublisher eventPublisher) {
+    public StylistController(StylistRepository stylistRepository, ApplicationEventPublisher eventPublisher) {
         this.stylistRepository = stylistRepository;
         this.eventPublisher = eventPublisher;
     }
@@ -66,7 +66,7 @@ public class StylistController {
 
         StylistEntity saved = stylistRepository.save(stylist);
 
-        eventPublisher.publishStylistCreated(new StylistCreatedEvent(saved.getId(), saved.getName(), saved.getSpecialty(), Boolean.TRUE.equals(saved.getIsAvailable()), LocalDateTime.now()));
+        eventPublisher.publishEvent(new StylistCreatedEvent(saved.getId(), saved.getName(), saved.getSpecialty(), Boolean.TRUE.equals(saved.getIsAvailable()), LocalDateTime.now()));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
@@ -88,7 +88,7 @@ public class StylistController {
 
                     StylistEntity updated = stylistRepository.save(stylist);
 
-                    eventPublisher.publishStylistUpdated(new StylistUpdatedEvent(updated.getId(), updated.getName(), updated.getSpecialty(), Boolean.TRUE.equals(updated.getIsAvailable()), LocalDateTime.now()));
+                    eventPublisher.publishEvent(new StylistUpdatedEvent(updated.getId(), updated.getName(), updated.getSpecialty(), Boolean.TRUE.equals(updated.getIsAvailable()), LocalDateTime.now()));
 
                     return ResponseEntity.ok(updated);
                 })
@@ -102,7 +102,7 @@ public class StylistController {
                 .map(st -> {
                     st.setIsAvailable(!Boolean.TRUE.equals(st.getIsAvailable()));
                     StylistEntity saved = stylistRepository.save(st);
-                    eventPublisher.publishStylistUpdated(new StylistUpdatedEvent(saved.getId(), saved.getName(), saved.getSpecialty(), Boolean.TRUE.equals(saved.getIsAvailable()), LocalDateTime.now()));
+                    eventPublisher.publishEvent(new StylistUpdatedEvent(saved.getId(), saved.getName(), saved.getSpecialty(), Boolean.TRUE.equals(saved.getIsAvailable()), LocalDateTime.now()));
                     return ResponseEntity.ok(saved);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -113,7 +113,7 @@ public class StylistController {
     public ResponseEntity<Void> deleteStylist(@PathVariable String id) {
         if (stylistRepository.existsById(id)) {
             stylistRepository.deleteById(id);
-            eventPublisher.publishStylistDeleted(new StylistDeletedEvent(id, LocalDateTime.now()));
+            eventPublisher.publishEvent(new StylistDeletedEvent(id, LocalDateTime.now()));
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.notFound().build();
