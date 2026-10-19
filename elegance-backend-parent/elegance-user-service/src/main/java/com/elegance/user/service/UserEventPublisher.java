@@ -22,31 +22,37 @@ public class UserEventPublisher {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publishUserCreated(UserCreatedEvent event) {
+        log.info("[event-received] class={} payload={}", event.getClass().getName(), event);
         log.info("📤 Publicando evento: user.created -> {}", event);
         rabbitTemplate.convertAndSend(exchange, "user.created", event);
     }
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publishUserUpdated(UserUpdatedEvent event) {
+        log.info("[event-received] class={} payload={}", event.getClass().getName(), event);
         log.info("📤 Publicando evento: user.updated -> {}", event);
         rabbitTemplate.convertAndSend(exchange, "user.updated", event);
     }
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publishUserDeleted(UserDeletedEvent event) {
+        log.info("[event-received] class={} payload={}", event.getClass().getName(), event);
         log.info("📤 Publicando evento: user.deleted -> {}", event);
         rabbitTemplate.convertAndSend(exchange, "user.deleted", event);
     }
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publishStylistCreated(StylistCreatedEvent event) {
+        log.info("[event-received] class={} payload={}", event.getClass().getName(), event);
         log.info("📤 Publicando evento: stylist.created -> {}", event);
         rabbitTemplate.convertAndSend(exchange, "stylist.created", event);
     }
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publishStylistUpdated(StylistUpdatedEvent event) {
+        log.info("[event-received] class={} payload={}", event.getClass().getName(), event);
         log.info("📤 Publicando evento: stylist.updated -> {}", event);
         rabbitTemplate.convertAndSend(exchange, "stylist.updated", event);
     }
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publishStylistDeleted(StylistDeletedEvent event) {
+        log.info("[event-received] class={} payload={}", event.getClass().getName(), event);
         log.info("📤 Publicando evento: stylist.deleted -> {}", event);
         rabbitTemplate.convertAndSend(exchange, "stylist.deleted", event);
     }
