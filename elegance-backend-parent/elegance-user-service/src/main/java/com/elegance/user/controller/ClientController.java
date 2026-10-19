@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -49,6 +50,7 @@ public class ClientController {
     }
 
     @PostMapping
+    @Transactional
     @Operation(summary = "Registrar nuevo cliente CRM")
     public ResponseEntity<ClientEntity> createClient(@RequestBody ClientEntity client) {
         if (client.getId() == null) {
@@ -66,6 +68,7 @@ public class ClientController {
     }
 
     @PutMapping("/{id}")
+    @Transactional
     @Operation(summary = "Actualizar cliente existente")
     public ResponseEntity<ClientEntity> updateClient(@PathVariable String id, @RequestBody ClientEntity clientDetails) {
         return clientRepository.findById(id)

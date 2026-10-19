@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -51,6 +52,7 @@ public class ServiceController {
     }
 
     @PostMapping
+    @Transactional
     @Operation(summary = "Registrar un nuevo servicio en el catálogo")
     public ResponseEntity<ServiceEntity> createService(@Valid @RequestBody ServiceRequest request) {
         ServiceEntity entity = new ServiceEntity();
@@ -71,6 +73,7 @@ public class ServiceController {
     }
 
     @PutMapping("/{id}")
+    @Transactional
     @Operation(summary = "Actualizar información de un servicio")
     public ResponseEntity<ServiceEntity> updateService(@PathVariable String id, @Valid @RequestBody ServiceRequest request) {
         return serviceRepository.findById(id)
