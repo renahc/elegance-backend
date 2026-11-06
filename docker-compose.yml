@@ -1,122 +1,545 @@
-version: '3.8'
-
-services:
-  # MySQL/MariaDB - Base de datos
-  db:
-    image: mariadb:11-alpine  # Alpine = 10x más rápido
-    container_name: elegance-db
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
-      MYSQL_DATABASE: elegance_users
-    ports:
-      - "3306:3306"
-    volumes:
-      - db_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    networks:
-      - elegance-network
-    restart: unless-stopped
-
-  # User Service (Puerto 8082)
-  user-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.user-service
-    container_name: elegance-user-service
-    environment:
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_NAME=elegance_users
-      - DB_USER=root
-      - DB_PASSWORD=${DB_PASSWORD:-root}
-      - MAIL_USERNAME=${MAIL_USERNAME:-}
-      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
-      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
-      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
-    ports:
-      - "8082:8082"
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - elegance-network
-    restart: unless-stopped
-
-  # Appointment Service (Puerto 8081)
-  appointment-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.appointment-service
-    container_name: elegance-appointment-service
-    environment:
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_NAME=elegance_appointments
-      - DB_USER=root
-      - DB_PASSWORD=${DB_PASSWORD:-root}
-      - MAIL_USERNAME=${MAIL_USERNAME:-}
-      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
-    ports:
-      - "8081:8081"
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - elegance-network
-    restart: unless-stopped
-
-  # Notification Service (Puerto 8083)
-  notification-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.notification-service
-    container_name: elegance-notification-service
-    environment:
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_USER=root
-      - DB_PASSWORD=${DB_PASSWORD:-root}
-      - MAIL_USERNAME=${MAIL_USERNAME:-}
-      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
-    ports:
-      - "8083:8083"
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - elegance-network
-    restart: unless-stopped
-
-  # Services & Rates Service (Puerto 8084)
-  services-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services-service
-    container_name: elegance-services-service
-    environment:
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_NAME=elegance_services
-      - DB_USER=root
-      - DB_PASSWORD=${DB_PASSWORD:-root}
-      - AZURE_AD_ISSUER_URI=${AZURE_AD_ISSUER_URI:-https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}
-      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-api://304d54f7-d485-478a-a1ea-0c2f874b0c1f}
-    ports:
-      - "8084:8084"
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - elegance-network
-    restart: unless-stopped
-
-volumes:
-  db_data:
-
-networks:
-  elegance-network:
-    driver: bridge
+{
+  "name": "elegance",
+  "services": {
+    "db": {
+      "image": "mysql:8.0.40",
+      "environment": {
+        "MYSQL_ROOT_PASSWORD": "${DB_PASSWORD:?Set DB_PASSWORD in .env}"
+      },
+      "volumes": [
+        "db-data:/var/lib/mysql",
+        "./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -p\"$$MYSQL_ROOT_PASSWORD\""
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 20
+      },
+      "restart": "unless-stopped"
+    },
+    "rabbitmq1": {
+      "image": "rabbitmq:3.13.7-management",
+      "hostname": "rabbitmq1",
+      "environment": {
+        "RABBITMQ_ERLANG_COOKIE": "${RABBITMQ_COOKIE:?Set RABBITMQ_COOKIE}",
+        "RABBITMQ_DEFAULT_USER": "${RABBITMQ_USER:-elegance}",
+        "RABBITMQ_DEFAULT_PASS": "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}"
+      },
+      "volumes": [
+        "rabbitmq1-data:/var/lib/rabbitmq"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "rabbitmq-diagnostics",
+          "-q",
+          "ping"
+        ],
+        "interval": "10s",
+        "timeout": "10s",
+        "retries": 20
+      },
+      "restart": "unless-stopped",
+      "ports": [
+        "127.0.0.1:15672:15672"
+      ]
+    },
+    "rabbitmq2": {
+      "image": "rabbitmq:3.13.7-management",
+      "hostname": "rabbitmq2",
+      "environment": {
+        "RABBITMQ_ERLANG_COOKIE": "${RABBITMQ_COOKIE:?Set RABBITMQ_COOKIE}",
+        "RABBITMQ_DEFAULT_USER": "${RABBITMQ_USER:-elegance}",
+        "RABBITMQ_DEFAULT_PASS": "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}"
+      },
+      "volumes": [
+        "rabbitmq2-data:/var/lib/rabbitmq"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "rabbitmq-diagnostics",
+          "-q",
+          "ping"
+        ],
+        "interval": "10s",
+        "timeout": "10s",
+        "retries": 20
+      },
+      "restart": "unless-stopped"
+    },
+    "rabbitmq-join": {
+      "image": "rabbitmq:3.13.7-management",
+      "hostname": "rabbitmq-join",
+      "environment": {
+        "RABBITMQ_ERLANG_COOKIE": "${RABBITMQ_COOKIE:?Set RABBITMQ_COOKIE}"
+      },
+      "depends_on": {
+        "rabbitmq1": {
+          "condition": "service_healthy"
+        },
+        "rabbitmq2": {
+          "condition": "service_healthy"
+        }
+      },
+      "entrypoint": [
+        "/bin/sh",
+        "-ec"
+      ],
+      "command": [
+        "if ! rabbitmqctl -n rabbit@rabbitmq2 cluster_status | grep -q rabbit@rabbitmq1; then\n rabbitmqctl -n rabbit@rabbitmq2 stop_app\n rabbitmqctl -n rabbit@rabbitmq2 join_cluster rabbit@rabbitmq1\n rabbitmqctl -n rabbit@rabbitmq2 start_app\nfi\nrabbitmqctl -n rabbit@rabbitmq1 cluster_status"
+      ]
+    },
+    "zookeeper": {
+      "image": "confluentinc/cp-zookeeper:7.9.0",
+      "environment": {
+        "ZOOKEEPER_CLIENT_PORT": 2181,
+        "ZOOKEEPER_TICK_TIME": 2000,
+        "KAFKA_HEAP_OPTS": "-Xms64m -Xmx256m"
+      },
+      "volumes": [
+        "zookeeper-data:/var/lib/zookeeper/data",
+        "zookeeper-log:/var/lib/zookeeper/log"
+      ],
+      "restart": "unless-stopped"
+    },
+    "kafka1": {
+      "image": "confluentinc/cp-kafka:7.9.0",
+      "hostname": "kafka1",
+      "depends_on": [
+        "zookeeper"
+      ],
+      "environment": {
+        "KAFKA_BROKER_ID": 1,
+        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper:2181",
+        "KAFKA_LISTENERS": "INTERNAL://0.0.0.0:29092",
+        "KAFKA_ADVERTISED_LISTENERS": "INTERNAL://kafka1:29092",
+        "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "INTERNAL:PLAINTEXT",
+        "KAFKA_INTER_BROKER_LISTENER_NAME": "INTERNAL",
+        "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR": 1,
+        "KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR": 1,
+        "KAFKA_TRANSACTION_STATE_LOG_MIN_ISR": 1,
+        "KAFKA_MIN_INSYNC_REPLICAS": 1,
+        "KAFKA_AUTO_CREATE_TOPICS_ENABLE": "false",
+        "KAFKA_DELETE_TOPIC_ENABLE": "true",
+        "KAFKA_HEAP_OPTS": "-Xms256m -Xmx512m"
+      },
+      "volumes": [
+        "kafka1-data:/var/lib/kafka/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "kafka-topics --bootstrap-server localhost:29092 --list >/dev/null 2>&1"
+        ],
+        "interval": "10s",
+        "timeout": "10s",
+        "retries": 30
+      },
+      "restart": "unless-stopped"
+    },
+    "kafka-init": {
+      "image": "confluentinc/cp-kafka:7.9.0",
+      "depends_on": {
+        "kafka1": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "KAFKA_REPLICATION_FACTOR": "${KAFKA_REPLICATION_FACTOR:-1}"
+      },
+      "volumes": [
+        "./docker/topics.sh:/topics.sh:ro"
+      ],
+      "entrypoint": [
+        "/bin/bash",
+        "/topics.sh"
+      ]
+    },
+    "kafka-ui": {
+      "image": "provectuslabs/kafka-ui:v0.7.2",
+      "depends_on": {
+        "kafka-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "ports": [
+        "127.0.0.1:8090:8080"
+      ],
+      "environment": {
+        "KAFKA_CLUSTERS_0_NAME": "elegance",
+        "KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS": "kafka1:29092",
+        "AUTH_TYPE": "LOGIN_FORM",
+        "SPRING_SECURITY_USER_NAME": "${DASHBOARD_USER:-elegance}",
+        "SPRING_SECURITY_USER_PASSWORD": "${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD}",
+        "JAVA_OPTS": "-Xms64m -Xmx256m"
+      },
+      "restart": "unless-stopped",
+      "mem_limit": "512m"
+    },
+    "user-service": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/Dockerfile.service",
+        "args": {
+          "MODULE": "elegance-user-service"
+        }
+      },
+      "environment": {
+        "DB_HOST": "db",
+        "DB_NAME": "elegance_users",
+        "DB_PASSWORD": "${DB_PASSWORD:?Set DB_PASSWORD}",
+        "SPRING_DATASOURCE_URL": "jdbc:mysql://db:3306/elegance_users?serverTimezone=UTC",
+        "SPRING_RABBITMQ_HOST": "rabbitmq1",
+        "SPRING_RABBITMQ_USERNAME": "${RABBITMQ_USER:-elegance}",
+        "SPRING_RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}",
+        "KAFKA_BOOTSTRAP_SERVERS": "kafka1:29092",
+        "KAFKA_REPLICATION_FACTOR": "${KAFKA_REPLICATION_FACTOR:-1}",
+        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
+        "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
+        "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
+        "CORS_ALLOWED_ORIGINS": "${CORS_ALLOWED_ORIGINS:-https://localhost:5173}",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
+        "SERVICES_URL": "http://services-service:8084",
+        "USERS_URL": "http://user-service:8082",
+        "MAIL_USERNAME": "${MAIL_USERNAME:-}",
+        "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+      },
+      "ports": [
+        "127.0.0.1:8082:8082"
+      ],
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy"
+        },
+        "rabbitmq-join": {
+          "condition": "service_completed_successfully"
+        },
+        "kafka-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "restart": "unless-stopped",
+      "mem_limit": "512m"
+    },
+    "appointment-service": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/Dockerfile.service",
+        "args": {
+          "MODULE": "elegance-appointment-service"
+        }
+      },
+      "environment": {
+        "DB_HOST": "db",
+        "DB_NAME": "elegance_appointments",
+        "DB_PASSWORD": "${DB_PASSWORD:?Set DB_PASSWORD}",
+        "SPRING_DATASOURCE_URL": "jdbc:mysql://db:3306/elegance_appointments?serverTimezone=UTC",
+        "SPRING_RABBITMQ_HOST": "rabbitmq1",
+        "SPRING_RABBITMQ_USERNAME": "${RABBITMQ_USER:-elegance}",
+        "SPRING_RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}",
+        "KAFKA_BOOTSTRAP_SERVERS": "kafka1:29092",
+        "KAFKA_REPLICATION_FACTOR": "${KAFKA_REPLICATION_FACTOR:-1}",
+        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
+        "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
+        "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
+        "CORS_ALLOWED_ORIGINS": "${CORS_ALLOWED_ORIGINS:-https://localhost:5173}",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
+        "SERVICES_URL": "http://services-service:8084",
+        "USERS_URL": "http://user-service:8082",
+        "MAIL_USERNAME": "${MAIL_USERNAME:-}",
+        "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+      },
+      "ports": [
+        "127.0.0.1:8081:8081"
+      ],
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy"
+        },
+        "rabbitmq-join": {
+          "condition": "service_completed_successfully"
+        },
+        "kafka-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "restart": "unless-stopped",
+      "mem_limit": "512m"
+    },
+    "notification-service": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/Dockerfile.service",
+        "args": {
+          "MODULE": "elegance-notification-service"
+        }
+      },
+      "environment": {
+        "DB_HOST": "db",
+        "DB_NAME": "elegance_notifications",
+        "DB_PASSWORD": "${DB_PASSWORD:?Set DB_PASSWORD}",
+        "SPRING_DATASOURCE_URL": "jdbc:mysql://db:3306/elegance_notifications?serverTimezone=UTC",
+        "SPRING_RABBITMQ_HOST": "rabbitmq1",
+        "SPRING_RABBITMQ_USERNAME": "${RABBITMQ_USER:-elegance}",
+        "SPRING_RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}",
+        "KAFKA_BOOTSTRAP_SERVERS": "kafka1:29092",
+        "KAFKA_REPLICATION_FACTOR": "${KAFKA_REPLICATION_FACTOR:-1}",
+        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
+        "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
+        "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
+        "CORS_ALLOWED_ORIGINS": "${CORS_ALLOWED_ORIGINS:-https://localhost:5173}",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
+        "SERVICES_URL": "http://services-service:8084",
+        "USERS_URL": "http://user-service:8082",
+        "MAIL_USERNAME": "${MAIL_USERNAME:-}",
+        "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+      },
+      "ports": [
+        "127.0.0.1:8083:8083"
+      ],
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy"
+        },
+        "rabbitmq-join": {
+          "condition": "service_completed_successfully"
+        },
+        "kafka-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "restart": "unless-stopped",
+      "mem_limit": "512m"
+    },
+    "services-service": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/Dockerfile.service",
+        "args": {
+          "MODULE": "elegance-services-service"
+        }
+      },
+      "environment": {
+        "DB_HOST": "db",
+        "DB_NAME": "elegance_services",
+        "DB_PASSWORD": "${DB_PASSWORD:?Set DB_PASSWORD}",
+        "SPRING_DATASOURCE_URL": "jdbc:mysql://db:3306/elegance_services?serverTimezone=UTC",
+        "SPRING_RABBITMQ_HOST": "rabbitmq1",
+        "SPRING_RABBITMQ_USERNAME": "${RABBITMQ_USER:-elegance}",
+        "SPRING_RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}",
+        "KAFKA_BOOTSTRAP_SERVERS": "kafka1:29092",
+        "KAFKA_REPLICATION_FACTOR": "${KAFKA_REPLICATION_FACTOR:-1}",
+        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
+        "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
+        "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
+        "CORS_ALLOWED_ORIGINS": "${CORS_ALLOWED_ORIGINS:-https://localhost:5173}",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
+        "SERVICES_URL": "http://services-service:8084",
+        "USERS_URL": "http://user-service:8082",
+        "MAIL_USERNAME": "${MAIL_USERNAME:-}",
+        "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+      },
+      "ports": [
+        "127.0.0.1:8084:8084"
+      ],
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy"
+        },
+        "rabbitmq-join": {
+          "condition": "service_completed_successfully"
+        },
+        "kafka-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "restart": "unless-stopped",
+      "mem_limit": "512m"
+    },
+    "analytics-service": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/Dockerfile.service",
+        "args": {
+          "MODULE": "elegance-analytics-service"
+        }
+      },
+      "environment": {
+        "DB_HOST": "db",
+        "DB_NAME": "elegance_analytics",
+        "DB_PASSWORD": "${DB_PASSWORD:?Set DB_PASSWORD}",
+        "SPRING_DATASOURCE_URL": "jdbc:mysql://db:3306/elegance_analytics?serverTimezone=UTC",
+        "SPRING_RABBITMQ_HOST": "rabbitmq1",
+        "SPRING_RABBITMQ_USERNAME": "${RABBITMQ_USER:-elegance}",
+        "SPRING_RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}",
+        "KAFKA_BOOTSTRAP_SERVERS": "kafka1:29092",
+        "KAFKA_REPLICATION_FACTOR": "${KAFKA_REPLICATION_FACTOR:-1}",
+        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
+        "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
+        "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
+        "CORS_ALLOWED_ORIGINS": "${CORS_ALLOWED_ORIGINS:-https://localhost:5173}",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
+        "SERVICES_URL": "http://services-service:8084",
+        "USERS_URL": "http://user-service:8082",
+        "MAIL_USERNAME": "${MAIL_USERNAME:-}",
+        "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
+        "KAFKA_STATE_DIR": "/tmp/elegance-streams",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx384m",
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+      },
+      "ports": [
+        "127.0.0.1:8085:8085"
+      ],
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy"
+        },
+        "rabbitmq-join": {
+          "condition": "service_completed_successfully"
+        },
+        "kafka-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "restart": "unless-stopped",
+      "mem_limit": "768m"
+    },
+    "audit-service": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/Dockerfile.service",
+        "args": {
+          "MODULE": "elegance-audit-service"
+        }
+      },
+      "environment": {
+        "DB_HOST": "db",
+        "DB_NAME": "elegance_audit",
+        "DB_PASSWORD": "${DB_PASSWORD:?Set DB_PASSWORD}",
+        "SPRING_DATASOURCE_URL": "jdbc:mysql://db:3306/elegance_audit?serverTimezone=UTC",
+        "SPRING_RABBITMQ_HOST": "rabbitmq1",
+        "SPRING_RABBITMQ_USERNAME": "${RABBITMQ_USER:-elegance}",
+        "SPRING_RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}",
+        "KAFKA_BOOTSTRAP_SERVERS": "kafka1:29092",
+        "KAFKA_REPLICATION_FACTOR": "${KAFKA_REPLICATION_FACTOR:-1}",
+        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
+        "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
+        "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
+        "CORS_ALLOWED_ORIGINS": "${CORS_ALLOWED_ORIGINS:-https://localhost:5173}",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
+        "SERVICES_URL": "http://services-service:8084",
+        "USERS_URL": "http://user-service:8082",
+        "MAIL_USERNAME": "${MAIL_USERNAME:-}",
+        "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+      },
+      "ports": [
+        "127.0.0.1:8086:8086"
+      ],
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy"
+        },
+        "rabbitmq-join": {
+          "condition": "service_completed_successfully"
+        },
+        "kafka-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "restart": "unless-stopped",
+      "mem_limit": "512m"
+    },
+    "kafka-admin-service": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/Dockerfile.service",
+        "args": {
+          "MODULE": "elegance-kafka-admin-service"
+        }
+      },
+      "environment": {
+        "DB_HOST": "db",
+        "DB_NAME": "elegance_kafkaadmin",
+        "DB_PASSWORD": "${DB_PASSWORD:?Set DB_PASSWORD}",
+        "SPRING_DATASOURCE_URL": "jdbc:mysql://db:3306/elegance_kafkaadmin?serverTimezone=UTC",
+        "SPRING_RABBITMQ_HOST": "rabbitmq1",
+        "SPRING_RABBITMQ_USERNAME": "${RABBITMQ_USER:-elegance}",
+        "SPRING_RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}",
+        "KAFKA_BOOTSTRAP_SERVERS": "kafka1:29092",
+        "KAFKA_REPLICATION_FACTOR": "${KAFKA_REPLICATION_FACTOR:-1}",
+        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
+        "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
+        "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
+        "CORS_ALLOWED_ORIGINS": "${CORS_ALLOWED_ORIGINS:-https://localhost:5173}",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
+        "SERVICES_URL": "http://services-service:8084",
+        "USERS_URL": "http://user-service:8082",
+        "MAIL_USERNAME": "${MAIL_USERNAME:-}",
+        "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
+        "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+      },
+      "ports": [
+        "127.0.0.1:8087:8087"
+      ],
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy"
+        },
+        "rabbitmq-join": {
+          "condition": "service_completed_successfully"
+        },
+        "kafka-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "restart": "unless-stopped",
+      "mem_limit": "512m"
+    },
+    "web": {
+      "image": "caddy:2.9.1-alpine",
+      "profiles": [
+        "web"
+      ],
+      "ports": [
+        "80:80",
+        "443:443"
+      ],
+      "environment": {
+        "APP_DOMAIN": "${APP_DOMAIN:-localhost}"
+      },
+      "volumes": [
+        "./docker/Caddyfile:/etc/caddy/Caddyfile:ro",
+        "./public:/srv:ro",
+        "caddy-data:/data",
+        "caddy-config:/config"
+      ],
+      "restart": "unless-stopped"
+    }
+  },
+  "volumes": {
+    "db-data": null,
+    "rabbitmq1-data": null,
+    "rabbitmq2-data": null,
+    "zookeeper-data": null,
+    "zookeeper-log": null,
+    "kafka1-data": null,
+    "caddy-data": null,
+    "caddy-config": null
+  }
+}

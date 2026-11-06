@@ -15,97 +15,98 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class StylistEntity {
-    @Id
-    private String id;
-    private String name;
-    private String role;
-    private String specialty;
-    private String avatar;
-    private Double rating;
-    private Integer reviewsCount;
-    private Boolean isAvailable;
-    private String shift;
-    private Integer completedTodayCount;
+  @Id private String id;
 
-    public String getId() {
-        return id;
-    }
+  @jakarta.validation.constraints.NotBlank
+  @jakarta.validation.constraints.Size(max = 150)
+  private String name;
 
-    public String getName() {
-        return name;
-    }
+  private String role;
+  private String specialty;
+  private String avatar;
+  private Double rating;
+  private Integer reviewsCount;
+  private Boolean isAvailable;
+  private String shift;
+  private Integer completedTodayCount;
 
-    public String getRole() {
-        return role;
-    }
+  public String getId() {
+    return id;
+  }
 
-    public String getSpecialty() {
-        return specialty;
-    }
+  public String getName() {
+    return name;
+  }
 
-    public String getAvatar() {
-        return avatar;
-    }
+  public String getRole() {
+    return role;
+  }
 
-    public Double getRating() {
-        return rating;
-    }
+  public String getSpecialty() {
+    return specialty;
+  }
 
-    public Integer getReviewsCount() {
-        return reviewsCount;
-    }
+  public String getAvatar() {
+    return avatar;
+  }
 
-    public Boolean getIsAvailable() {
-        return isAvailable;
-    }
+  public Double getRating() {
+    return rating;
+  }
 
-    public String getShift() {
-        return shift;
-    }
+  public Integer getReviewsCount() {
+    return reviewsCount;
+  }
 
-    public Integer getCompletedTodayCount() {
-        return completedTodayCount;
-    }
+  public Boolean getIsAvailable() {
+    return isAvailable;
+  }
 
-    public void setId(String id) {
-        this.id = id;
-    }
+  public String getShift() {
+    return shift;
+  }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+  public Integer getCompletedTodayCount() {
+    return completedTodayCount;
+  }
 
-    public void setRole(String role) {
-        this.role = role;
-    }
+  public void setId(String id) {
+    this.id = id;
+  }
 
-    public void setSpecialty(String specialty) {
-        this.specialty = specialty;
-    }
+  public void setName(String name) {
+    this.name = name;
+  }
 
-    public void setAvatar(String avatar) {
-        this.avatar = avatar;
-    }
+  public void setRole(String role) {
+    this.role = role;
+  }
 
-    public void setRating(Double rating) {
-        this.rating = rating;
-    }
+  public void setSpecialty(String specialty) {
+    this.specialty = specialty;
+  }
 
-    public void setReviewsCount(Integer reviewsCount) {
-        this.reviewsCount = reviewsCount;
-    }
+  public void setAvatar(String avatar) {
+    this.avatar = avatar;
+  }
 
-    public void setIsAvailable(Boolean isAvailable) {
-        this.isAvailable = isAvailable;
-    }
+  public void setRating(Double rating) {
+    this.rating = rating;
+  }
 
-    public void setShift(String shift) {
-        this.shift = shift;
-    }
+  public void setReviewsCount(Integer reviewsCount) {
+    this.reviewsCount = reviewsCount;
+  }
 
-    public void setCompletedTodayCount(Integer completedTodayCount) {
-        this.completedTodayCount = completedTodayCount;
-    }
+  public void setIsAvailable(Boolean isAvailable) {
+    this.isAvailable = isAvailable;
+  }
 
+  public void setShift(String shift) {
+    this.shift = shift;
+  }
 
+  public void setCompletedTodayCount(Integer completedTodayCount) {
+    this.completedTodayCount = completedTodayCount;
+  }
 }

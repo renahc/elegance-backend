@@ -1,0 +1,46 @@
+{
+  "services": {
+    "user-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      }
+    },
+    "appointment-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      }
+    },
+    "notification-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      }
+    },
+    "services-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      }
+    },
+    "analytics-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      }
+    },
+    "audit-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      }
+    },
+    "kafka-admin-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      }
+    }
+  }
+}
