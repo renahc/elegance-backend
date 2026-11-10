@@ -1,7 +1,7 @@
 name: Backend validation and deployment
 on:
   push:
-    branches: [main, Develop/Microservicios]
+    branches: feat/ep3-kafka-streaming-20261106
   pull_request:
   workflow_dispatch:
     inputs:

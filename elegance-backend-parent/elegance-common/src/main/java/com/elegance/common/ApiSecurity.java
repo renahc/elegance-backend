@@ -70,7 +70,7 @@ public class ApiSecurity {
 
   @Bean
   CorsConfigurationSource corsConfigurationSource(
-      @Value("${CORS_ALLOWED_ORIGINS:https://localhost:5173}") String origins) {
+      @Value("${CORS_ALLOWED_ORIGINS:*}") String origins) {
     CorsConfiguration c = new CorsConfiguration();
     c.setAllowedOrigins(Arrays.asList(origins.split(",")));
     c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
