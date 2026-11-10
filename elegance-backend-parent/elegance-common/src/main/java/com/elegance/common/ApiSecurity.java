@@ -50,7 +50,8 @@ public class ApiSecurity {
 
   @Bean
   JwtDecoder jwtDecoder(
-      @Value("${AZURE_AD_ISSUER_URI:https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/}")
+      @Value(
+              "${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/7607c5a6-994c-4951-92bc-3af0cf3eb713/v2.0}")
           String issuer,
       @Value("${AZURE_AD_CLIENT_ID:304d54f7-d485-478a-a1ea-0c2f874b0c1f}") String audience,
       @Value(

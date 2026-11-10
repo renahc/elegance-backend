@@ -364,7 +364,7 @@ resource "aws_apigatewayv2_authorizer" "azure_ad_auth" {
       "304d54f7-d485-478a-a1ea-0c2f874b0c1f",
       "api://304d54f7-d485-478a-a1ea-0c2f874b0c1f"
     ]
-    issuer = "https://sts.windows.net/7607c5a6-994c-4951-92bc-3af0cf3eb713/"
+    issuer = var.azure_ad_issuer_uri
   }
 }
 

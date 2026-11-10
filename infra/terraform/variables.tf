@@ -28,3 +28,9 @@ variable "mail_password" {
   type      = string
   sensitive = true
 }
+
+variable "azure_ad_issuer_uri" {
+  description = "Issuer exacto de los access tokens de la API de Entra ID"
+  type        = string
+  default     = "https://login.microsoftonline.com/7607c5a6-994c-4951-92bc-3af0cf3eb713/v2.0"
+}
