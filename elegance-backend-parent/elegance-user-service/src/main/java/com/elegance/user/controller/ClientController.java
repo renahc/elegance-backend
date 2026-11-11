@@ -2,13 +2,19 @@ package com.elegance.user.controller;
 
 import com.elegance.user.model.ClientEntity;
 import com.elegance.user.repository.ClientRepository;
+import com.elegance.user.event.UserCreatedEvent;
+import com.elegance.user.event.UserUpdatedEvent;
+import com.elegance.user.event.UserDeletedEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,10 +24,12 @@ import java.util.UUID;
 public class ClientController {
 
     private final ClientRepository clientRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
-    public ClientController(ClientRepository clientRepository) {
+    public ClientController(ClientRepository clientRepository, ApplicationEventPublisher eventPublisher) {
         this.clientRepository = clientRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @GetMapping
@@ -42,6 +50,7 @@ public class ClientController {
     }
 
     @PostMapping
+    @Transactional
     @Operation(summary = "Registrar nuevo cliente CRM")
     public ResponseEntity<ClientEntity> createClient(@RequestBody ClientEntity client) {
         if (client.getId() == null) {
@@ -51,10 +60,15 @@ public class ClientController {
             client.setTier("Nuevo");
         }
         ClientEntity saved = clientRepository.save(client);
+
+        // Publish domain event via ApplicationEventPublisher so transactional listeners send to RabbitMQ AFTER_COMMIT
+        eventPublisher.publishEvent(new UserCreatedEvent(saved.getId(), saved.getName(), saved.getEmail(), "CLIENT", LocalDateTime.now()));
+
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     @PutMapping("/{id}")
+    @Transactional
     @Operation(summary = "Actualizar cliente existente")
     public ResponseEntity<ClientEntity> updateClient(@PathVariable String id, @RequestBody ClientEntity clientDetails) {
         return clientRepository.findById(id)
@@ -68,8 +82,11 @@ public class ClientController {
                     client.setLastVisit(clientDetails.getLastVisit());
                     client.setTier(clientDetails.getTier());
                     client.setNotes(clientDetails.getNotes());
-                    
+
                     ClientEntity updated = clientRepository.save(client);
+
+                    eventPublisher.publishEvent(new UserUpdatedEvent(updated.getId(), updated.getName(), updated.getEmail(), "CLIENT", LocalDateTime.now()));
+
                     return ResponseEntity.ok(updated);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -80,6 +97,7 @@ public class ClientController {
     public ResponseEntity<Void> deleteClient(@PathVariable String id) {
         if (clientRepository.existsById(id)) {
             clientRepository.deleteById(id);
+            eventPublisher.publishEvent(new UserDeletedEvent(id, LocalDateTime.now()));
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.notFound().build();
