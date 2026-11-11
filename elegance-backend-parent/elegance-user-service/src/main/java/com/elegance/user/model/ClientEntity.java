@@ -8,67 +8,128 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "clientes")
 public class ClientEntity {
-    @Id
-    private String id;
-    private String name;
-    private String email;
-    private String phone;
-    private String avatar;
-    private Integer totalVisits;
-    private Integer totalSpent;
-    private String lastVisit;
-    private String tier;
-    
-    @Column(length = 1000)
-    private String notes;
+  @Id private String id;
 
-    // Constructor vacío
-    public ClientEntity() {
-    }
+  @jakarta.validation.constraints.NotBlank
+  @jakarta.validation.constraints.Size(max = 150)
+  private String name;
 
-    // Constructor completo
-    public ClientEntity(String id, String name, String email, String phone, String avatar, 
-                       Integer totalVisits, Integer totalSpent, String lastVisit, String tier, String notes) {
-        this.id = id;
-        this.name = name;
-        this.email = email;
-        this.phone = phone;
-        this.avatar = avatar;
-        this.totalVisits = totalVisits;
-        this.totalSpent = totalSpent;
-        this.lastVisit = lastVisit;
-        this.tier = tier;
-        this.notes = notes;
-    }
+  private String email;
+  private String phone;
+  private String avatar;
+  private Integer totalVisits;
+  private Integer totalSpent;
+  private String lastVisit;
+  private String tier;
 
-    // Getters y Setters
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+  @Column(length = 1000)
+  private String notes;
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+  // Constructor vacío
+  public ClientEntity() {}
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
+  // Constructor completo
+  public ClientEntity(
+      String id,
+      String name,
+      String email,
+      String phone,
+      String avatar,
+      Integer totalVisits,
+      Integer totalSpent,
+      String lastVisit,
+      String tier,
+      String notes) {
+    this.id = id;
+    this.name = name;
+    this.email = email;
+    this.phone = phone;
+    this.avatar = avatar;
+    this.totalVisits = totalVisits;
+    this.totalSpent = totalSpent;
+    this.lastVisit = lastVisit;
+    this.tier = tier;
+    this.notes = notes;
+  }
 
-    public String getPhone() { return phone; }
-    public void setPhone(String phone) { this.phone = phone; }
+  // Getters y Setters
+  public String getId() {
+    return id;
+  }
 
-    public String getAvatar() { return avatar; }
-    public void setAvatar(String avatar) { this.avatar = avatar; }
+  public void setId(String id) {
+    this.id = id;
+  }
 
-    public Integer getTotalVisits() { return totalVisits; }
-    public void setTotalVisits(Integer totalVisits) { this.totalVisits = totalVisits; }
+  public String getName() {
+    return name;
+  }
 
-    public Integer getTotalSpent() { return totalSpent; }
-    public void setTotalSpent(Integer totalSpent) { this.totalSpent = totalSpent; }
+  public void setName(String name) {
+    this.name = name;
+  }
 
-    public String getLastVisit() { return lastVisit; }
-    public void setLastVisit(String lastVisit) { this.lastVisit = lastVisit; }
+  public String getEmail() {
+    return email;
+  }
 
-    public String getTier() { return tier; }
-    public void setTier(String tier) { this.tier = tier; }
+  public void setEmail(String email) {
+    this.email = email;
+  }
 
-    public String getNotes() { return notes; }
-    public void setNotes(String notes) { this.notes = notes; }
+  public String getPhone() {
+    return phone;
+  }
+
+  public void setPhone(String phone) {
+    this.phone = phone;
+  }
+
+  public String getAvatar() {
+    return avatar;
+  }
+
+  public void setAvatar(String avatar) {
+    this.avatar = avatar;
+  }
+
+  public Integer getTotalVisits() {
+    return totalVisits;
+  }
+
+  public void setTotalVisits(Integer totalVisits) {
+    this.totalVisits = totalVisits;
+  }
+
+  public Integer getTotalSpent() {
+    return totalSpent;
+  }
+
+  public void setTotalSpent(Integer totalSpent) {
+    this.totalSpent = totalSpent;
+  }
+
+  public String getLastVisit() {
+    return lastVisit;
+  }
+
+  public void setLastVisit(String lastVisit) {
+    this.lastVisit = lastVisit;
+  }
+
+  public String getTier() {
+    return tier;
+  }
+
+  public void setTier(String tier) {
+    this.tier = tier;
+  }
+
+  public String getNotes() {
+    return notes;
+  }
+
+  public void setNotes(String notes) {
+    this.notes = notes;
+  }
 }

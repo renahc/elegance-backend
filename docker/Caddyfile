@@ -1,0 +1,48 @@
+{$APP_DOMAIN:localhost} {
+ encode zstd gzip
+ header {
+  X-Content-Type-Options nosniff
+  Referrer-Policy strict-origin-when-cross-origin
+  X-Frame-Options DENY
+ }
+ @appointments path /api/v1/appointments /api/v1/appointments/*
+ handle @appointments {
+  reverse_proxy appointment-service:8081
+ }
+ @kafka path /api/v1/admin/kafka /api/v1/admin/kafka/*
+ handle @kafka {
+  reverse_proxy kafka-admin-service:8087
+ }
+ @rabbit path /api/v1/admin/*
+ handle @rabbit {
+  reverse_proxy appointment-service:8081
+ }
+ @users path /api/v1/clients /api/v1/clients/* /api/v1/stylists /api/v1/stylists/*
+ handle @users {
+  reverse_proxy user-service:8082
+ }
+ @catalog path /api/v1/services /api/v1/services/* /api/v1/rates /api/v1/rates/*
+ handle @catalog {
+  reverse_proxy services-service:8084
+ }
+ @notifications path /api/v1/notifications /api/v1/notifications/*
+ handle @notifications {
+  reverse_proxy notification-service:8083
+ }
+ @analytics path /api/v1/analytics /api/v1/analytics/*
+ handle @analytics {
+  reverse_proxy analytics-service:8085
+ }
+ @audit path /api/v1/audit /api/v1/audit/*
+ handle @audit {
+  reverse_proxy audit-service:8086
+ }
+ handle /api/* {
+  respond "Not found" 404
+ }
+ handle {
+  root * /srv
+  try_files {path} /index.html
+  file_server
+ }
+}

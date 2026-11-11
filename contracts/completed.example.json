@@ -1,0 +1,19 @@
+{
+  "eventId": "e37827cd-6714-4dd3-8e10-69c0bcab98d1",
+  "eventType": "COMPLETED",
+  "schemaVersion": 1,
+  "correlationId": "7e20a497-682f-443d-96ad-f12e338d24ef",
+  "occurredAt": "2026-11-06T15:00:00Z",
+  "appointmentId": "apt-example",
+  "appointmentVersion": 2,
+  "serviceId": "srv-example",
+  "serviceCategory": "cabello",
+  "stylistId": "sty-example",
+  "date": "2026-11-07",
+  "time": "12:00:00",
+  "previousStatus": "en_proceso",
+  "status": "completada",
+  "amount": 25000,
+  "currency": "CLP",
+  "durationMinutes": 60
+}

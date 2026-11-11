@@ -1,146 +1,85 @@
-# Élégance Beauty Studio - Backend Microservices Architecture
+# Élégance backend
 
-Backend desacoplado en microservicios desarrollado con **Java 17**, **Spring Boot 3.2.3**, **Azure AD (Microsoft Entra ID)**, **Docker**, **Terraform** y despliegue continuo en **AWS EC2** con **GitHub Actions**.
+Java 17 / Spring Boot 3.2.3. Seven HTTP services share versioned event contracts in `elegance-common`.
 
----
+| Service | Port | Responsibility |
+| --- | --- | --- |
+| appointment | 8081 | Reservations, ownership, time conflicts, transactional outbox |
+| user | 8082 | Clients, current identity profile, stylists |
+| notification | 8083 | RabbitMQ consumers and durable notifications |
+| services | 8084 | Catalog and rates |
+| analytics | 8085 | Kafka Streams pipeline and statistics |
+| audit | 8086 | Independent Kafka consumer and durable event history |
+| kafka-admin | 8087 | Topics, partitions, configuration, groups, lag, offsets, DLT replay |
 
-## 🏛️ Arquitectura del Sistema
+## Run locally
 
-El proyecto está organizado como un repositorio multi-módulo Maven (`elegance-backend-parent`), compuesto por tres microservicios independientes:
-
-```
-elegance-backend/
-├── .github/
-│   └── workflows/
-│       └── deploy-backend.yml         # Pipeline CI/CD automatizado hacia AWS EC2
-├── docker-compose.yml                 # Orquestación de desarrollo local
-├── elegancebd.sql                     # Script DDL y de seed para MySQL/MariaDB
-├── infra/
-│   └── terraform/                     # Infraestructura como Código (IaC) para AWS EC2
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       └── scripts/
-│           └── restart.sh             # Script de arranque y reinicio de servicios
-├── scripts/
-│   └── restart.sh                     # Script de arranque en la máquina host/EC2
-└── elegance-backend-parent/           # Proyecto Maven Multi-Módulo
-    ├── pom.xml                        # POM Padre con gestión de dependencias y versiones
-    ├── elegance-user-service/         # Microservicio de Usuarios y Personal (Puerto 8082)
-    ├── elegance-appointment-service/  # Microservicio de Citas y Reservas (Puerto 8081)
-    └── elegance-notification-service/ # Microservicio de Notificaciones por Email (Puerto 8083)
+```sh
+cp .env.example .env
+# Replace password placeholders and configure Entra issuer, audience and JWKS URI.
+docker compose up -d --build
 ```
 
----
+The default environment has one Kafka broker. For a fresh evaluation environment with three brokers:
 
-## 📦 Microservicios
-
-### 1. `elegance-user-service` (Puerto `8082`)
-- **Base de Datos:** MySQL / MariaDB (`elegance_users`)
-- **Responsabilidad:**
-  - **Clientes (CRM):** Listar clientes, búsqueda por nombre, registrar, editar datos de perfil y fidelización (`tier`), y eliminar (`/api/v1/clients`).
-  - **Estilistas / Staff:** Listar equipo, registrar estilistas, actualizar especialidades, calificaciones y cambiar disponibilidad en tiempo real (`/api/v1/stylists`).
-- **Documentación Swagger:** `http://localhost:8082/swagger-ui.html`
-
-### 2. `elegance-appointment-service` (Puerto `8081`)
-- **Base de Datos:** MySQL / MariaDB (`elegance_appointments`)
-- **Responsabilidad:**
-  - **Agenda y Reservaciones:** Crear citas, consultar agenda con filtros por fecha y estado (`confirmada`, `en_proceso`, `cancelada`), actualizar estado y cancelar reservas (`/api/v1/appointments`).
-  - **Autonomía de Datos:** Mantiene una instantánea (*snapshot*) desnormalizada de los datos del cliente, estilista y servicio en `AppointmentEntity` para evitar acoplamiento síncrono con `user-service`.
-- **Documentación Swagger:** `http://localhost:8081/swagger-ui.html`
-
-### 3. `elegance-notification-service` (Puerto `8083`)
-- **Responsabilidad:**
-  - **Notificaciones Transaccionales:** Envío asíncrono de correos electrónicos mediante **Spring Mail** y protocolo SMTP (`/api/v1/notifications/email`).
-- **Documentación Swagger:** `http://localhost:8083/swagger-ui.html`
-
----
-
-## 🔐 Seguridad con Azure AD / Microsoft Entra ID
-
-Cada microservicio opera de forma autónoma como un **OAuth2 Resource Server** (`spring-boot-starter-oauth2-resource-server`):
-- Validación de tokens JWT en la cabecera `Authorization: Bearer <TOKEN_AZURE>`.
-- Comprobación del emisor (*Issuer*) y validación de la audiencia (*Audience / Client ID*).
-- **Configuración Dinámica:** Los valores de emisor y audiencia son parametrizables vía variables de entorno o GitHub Secrets, contando con valores por defecto de contingencia:
-  - `AZURE_AD_ISSUER_URI` (por defecto: `https://sts.windows.net/ff064edc-07f4-448c-97e1-49da14c085f5/`)
-  - `AZURE_AD_CLIENT_ID` (por defecto: `api://304d54f7-d485-478a-a1ea-0c2f874b0c1f`)
-- Rutas públicas exentas de autenticación:
-  - `/swagger-ui/**`, `/swagger-ui.html`, `/v3/api-docs/**`, `/actuator/health`
-
----
-
-## 🚀 Ejecución en Desarrollo Local
-
-### Opción A: Con Docker Compose (Recomendado)
-Los microservicios cuentan con **Multi-stage Dockerfiles** que compilan el código fuente dentro del contenedor automáticamente mediante Maven, por lo que **no requieres tener Maven o Java instalados localmente**.
-
-```bash
-# Construir imágenes y levantar servicios junto con MySQL
-docker compose up --build
+```sh
+docker compose -f docker-compose.yml -f docker-compose.cluster.yml up -d --build
 ```
 
-Servicios disponibles:
-- **MySQL 8.0:** `localhost:3306` (Base de datos: `elegance_db`, Usuario: `root`, Password: `rootpassword`)
-- **User Service:** `http://localhost:8082`
-- **Appointment Service:** `http://localhost:8081`
-- **Notification Service:** `http://localhost:8083`
+Use replication factor 3 in `.env` for that environment. Existing topics do not acquire additional replicas simply by adding brokers; use a fresh environment or explicit replica reassignment. Each business topic has three partitions. The three brokers on one machine demonstrate broker failure, not EC2 host failure.
 
----
+API ports bind only to localhost. Kafka UI: `http://localhost:8090`; RabbitMQ Management: `http://localhost:15672`. Credentials come from `.env`. The `demo` Spring profile explicitly inserts fictitious catalog and CRM data. Default execution does not seed data.
 
-### Opción B: Ejecución Manual con Maven Wrapper
+Run the React frontend from its separate repository. Vite proxies `/api/v1` to these local ports. Use HTTPS and register its origin as a SPA redirect URI in Entra.
 
-1. **Requisitos:** Java 17 instalado.
-2. **Compilar todos los módulos desde la raíz del proyecto parent:**
-   ```bash
-   cd elegance-backend-parent
-   # En Windows:
-   .\mvnw.cmd clean package -DskipTests
-   # En Linux / macOS:
-   ./mvnw clean package -DskipTests
-   ```
-3. **Ejecutar cada microservicio de forma independiente:**
-   ```bash
-   # Terminal 1 - Users:
-   java -jar elegance-user-service/target/elegance-user-service-1.0.0-SNAPSHOT.jar
+## Event contracts
 
-   # Terminal 2 - Appointments:
-   java -jar elegance-appointment-service/target/elegance-appointment-service-1.0.0-SNAPSHOT.jar
+`contracts/salon-event.schema.json` and its examples define JSON v1. Message keys are appointment IDs. Events contain no client names or email addresses.
 
-   # Terminal 3 - Notifications:
-   java -jar elegance-notification-service/target/elegance-notification-service-1.0.0-SNAPSHOT.jar
-   ```
+Business topics:
 
----
+- `elegance.appointments.events.v1`: CREATED and STATUS_UPDATED.
+- `elegance.services.completed.v1`: COMPLETED, once per transition to completed.
 
-## ☁️ Infraestructura en AWS (Terraform) & CI/CD
+Auxiliary topics:
 
-### Infraestructura como Código (`infra/terraform`)
-- **Recursos provisionados:**
-  - Instancia **AWS EC2 `t3.small`** con **Amazon Linux 2023** en `us-east-1`.
-  - Configuración automatizada con `user_data`: Instalación de Java 17 Corretto, MariaDB 10.5 (`mariadb105-server`), aprovisionamiento de bases de datos (`elegance_users` y `elegance_appointments`) y directorio `/opt/elegance`.
-  - Security Group con apertura restringida a SSH (puerto 22) y puertos de microservicios (`8081`, `8082`, `8083`).
-  - Generación dinámica de par de llaves SSH (`tls_private_key`).
-  - Backend remoto de estado en **AWS S3** (`elegance-tf-state-2026-gabriel`) con bloqueo de concurrencia en **DynamoDB** (`elegance-tf-lock`).
+- `elegance.analytics.facts.v1`: validated records for the idempotent database projection.
+- `elegance.analytics.windows.v1`: processing-record throughput per category in five-minute windows. This is an operational metric, not revenue.
+- `elegance.streaming.invalid.v1`: invalid raw input rejected by the Streams pipeline.
 
-### Pipeline CI/CD (`deploy-backend.yml`)
-El flujo de GitHub Actions se ejecuta automáticamente en cada `push` o `pull_request` a la rama `Develop/Microservicios`:
-1. Realiza el checkout del repositorio e instala JDK 17 (Temurin).
-2. Compila y empaqueta los tres JARs con Maven Wrapper.
-3. Autentica en AWS y ejecuta `terraform apply -auto-approve`.
-4. Espera a que la instancia EC2 y el motor de base de datos estén listos.
-5. Genera el archivo `/opt/elegance/.env` con las credenciales seguras.
-6. Transfiere vía SCP los tres artefactos `.jar`, el archivo `.env` y el script `restart.sh`.
-7. Ejecuta `restart.sh` vía SSH para arrancar los servicios en segundo plano con `nohup`.
+Four `.DLT` topics are provisioned for the two business topics, facts and invalid input. Kafka also creates internal offset, transaction, repartition and changelog topics. Business events and facts have seven-day retention; DLTs have fourteen days. `docker/topics.sh` configures the topology explicitly.
 
-### Secretos Requeridos en GitHub Actions
+The outbox stores business changes and pending messages in the same database transaction. Publishers confirm delivery independently for Kafka and RabbitMQ. A crash after send can redeliver an event; consumers persist unique event IDs and financial statistics deduplicate completed appointment IDs. Database side effects use at-least-once delivery with idempotence. Streams' exactly-once processing applies within Kafka, not to arbitrary external effects.
 
-| Nombre del Secreto | Descripción |
-| :--- | :--- |
-| `AWS_ACCESS_KEY_ID` | Clave de acceso IAM de AWS para Terraform |
-| `AWS_SECRET_ACCESS_KEY` | Clave secreta IAM de AWS |
-| `AWS_SESSION_TOKEN` | Token de sesión temporal (si se utiliza AWS Academy / Learner Lab) |
-| `TEST_DB_PASSWORD` | Contraseña asignada al usuario `root` de la base de datos MySQL en EC2 |
-| `MAIL_USERNAME` | Correo electrónico de salida SMTP (Gmail) |
-| `MAIL_PASSWORD` | Contraseña de aplicación para autenticación SMTP |
-| `AZURE_AD_ISSUER_URI` | *(Opcional)* URI del emisor de tokens Azure AD |
-| `AZURE_AD_CLIENT_ID` | *(Opcional)* Client ID o Audiencia (`aud`) de Azure AD |
+Statistics represent events received by this pipeline. They do not automatically include historical seeded appointments. Service value is not collected payment revenue.
+
+## Security
+
+Only catalog/stylist reads and health checks are public. Other business operations require a signed, unexpired JWT with matching issuer and audience. Administration requires an Entra app role whose value is exactly `Admin`. Clients can access only their own reservations and `/api/v1/clients/me`. Do not use Microsoft Graph tokens for this API; request its `access_as_user` scope.
+
+`AZURE_AD_ISSUER_URI` must match the actual API token issuer (v1 or v2), and `AZURE_AD_JWK_SET_URI` must match the tenant. No authentication bypass is enabled in the normal compose file.
+
+## Tests
+
+```sh
+mvn -f elegance-backend-parent/pom.xml verify
+# Compiles JARs used by the prebuilt test Dockerfile.
+cp .env.example .env.integration
+docker compose --env-file .env.integration -f docker-compose.yml -f docker-compose.test.yml -p elegance-integration up -d --build
+python3 scripts/test/integration.py
+ELEGANCE_TEST_ENV=.env.integration python3 scripts/test/resilience.py
+```
+
+The test overlay runs a disposable RSA JWT issuer on localhost:19000. Never apply that overlay to a deployed environment. It tests actual JWT signature/issuer/audience/expiration validation independently of interactive Microsoft login.
+
+`integration.py` checks roles, ownership, canonical pricing, conflicts, both Kafka topics, statistics, audit, Rabbit notifications, topic administration and lag. `resilience.py` requires a successful integration run first and checks duplicate delivery, DLQ, DLT and persistence across restarts.
+
+`scripts/test/load.sh [count]` uses Kafka's producer performance tool against an isolated test topic, up to 100000 records. It reports confirmed sends and latency. The topic has one-hour retention. Set `KAFKA_CONCURRENCY` to increase listener threads; `docker-compose.scale.yml` removes the audit host-port binding so multiple instances can share its group.
+
+## AWS
+
+`infra/streaming` provisions a separate Ubuntu EC2 and restricted security group without terminating existing instances. Terraform requires an existing SSH key name and administrator CIDR. Choose instance capacity after measuring the selected broker profile.
+
+Upload sources and `.env` separately to `/opt/elegance`; upload the frontend build to `/opt/elegance/public`. Set `APP_DOMAIN` to a DNS name pointing at EC2. Run `ELEGANCE_CLUSTER=true bash scripts/deploy-streaming.sh` for the three-broker profile. Caddy serves the frontend and API over HTTPS. Broker and database ports stay internal; dashboard ports bind to loopback and can be reached through SSH forwarding.
+
+GitHub workflows validate PRs. Production deployment is an explicit workflow dispatch and uses `EC2_HOST`, `EC2_SSH_KEY`, `EC2_KNOWN_HOSTS` and optional `EC2_USER`. They do not recreate instances or run Terraform automatically. The environment file stays on the server. Public GitHub visibility, Microsoft app configuration and real-user login must be verified separately before handoff.
