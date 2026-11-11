@@ -1,4 +1,4 @@
-name: Deploy Backend Application to Existing EC2
+name: Recreate and Deploy Backend Infrastructure
 
 on:
   push:
@@ -12,16 +12,45 @@ concurrency:
 
 jobs:
   deploy-to-ec2:
-    name: Build and Deploy Spring Boot Services
+    name: Recreate AWS infrastructure and deploy Spring Boot services
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Validate restart script syntax
-        run: bash -n scripts/restart.sh
+        run: |
+          bash -n scripts/restart.sh
+          bash -n infra/terraform/scripts/cleanup-project-resources.sh
+
+      - name: Validate required GitHub secrets
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          RABBITMQ_PASSWORD: ${{ secrets.SPRING_RABBITMQ_PASSWORD }}
+          RABBITMQ_ERLANG_COOKIE: ${{ secrets.RABBITMQ_ERLANG_COOKIE }}
+          AZURE_AD_ISSUER_URI: ${{ secrets.AZURE_AD_ISSUER_URI }}
+          AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          for name in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN \
+            DB_PASSWORD MAIL_USERNAME MAIL_PASSWORD RABBITMQ_PASSWORD \
+            RABBITMQ_ERLANG_COOKIE AZURE_AD_ISSUER_URI AZURE_AD_CLIENT_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "Required GitHub secret is missing: $name" >&2
+              exit 1
+            fi
+          done
+          if [[ "$AZURE_AD_ISSUER_URI" != https://login.microsoftonline.com/*/v2.0 ]]; then
+            echo "AZURE_AD_ISSUER_URI must be the Entra ID v2 issuer." >&2
+            exit 1
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -36,49 +65,83 @@ jobs:
           chmod +x ./mvnw
           ./mvnw -B clean package -DskipTests
 
-      - name: Validate deployment configuration
+      - name: Configure AWS Academy credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Recreate backend infrastructure with temporary local state
+        id: terraform
+        working-directory: infra/terraform
         env:
-          BACKEND_EC2_HOST: ${{ secrets.BACKEND_EC2_HOST }}
-          BACKEND_EC2_SSH_KEY: ${{ secrets.BACKEND_EC2_SSH_KEY }}
-          DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
-          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
-          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
-          AZURE_AD_ISSUER_URI: ${{ secrets.AZURE_AD_ISSUER_URI }}
-          AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
-          SPRING_RABBITMQ_HOST: ${{ secrets.SPRING_RABBITMQ_HOST }}
-          SPRING_RABBITMQ_PASSWORD: ${{ secrets.SPRING_RABBITMQ_PASSWORD }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TF_VAR_db_password: ${{ secrets.TEST_DB_PASSWORD }}
+          TF_VAR_mail_username: ${{ secrets.MAIL_USERNAME }}
+          TF_VAR_mail_password: ${{ secrets.MAIL_PASSWORD }}
+          TF_VAR_rabbitmq_password: ${{ secrets.SPRING_RABBITMQ_PASSWORD }}
+          TF_VAR_rabbitmq_erlang_cookie: ${{ secrets.RABBITMQ_ERLANG_COOKIE }}
+          TF_VAR_azure_ad_issuer_uri: ${{ secrets.AZURE_AD_ISSUER_URI }}
         run: |
           set -euo pipefail
-          for name in BACKEND_EC2_HOST BACKEND_EC2_SSH_KEY DB_PASSWORD \
-            AZURE_AD_ISSUER_URI AZURE_AD_CLIENT_ID SPRING_RABBITMQ_HOST \
-            SPRING_RABBITMQ_PASSWORD; do
-            if [[ -z "${!name}" ]]; then
-              echo "Required GitHub secret is missing: $name" >&2
-              exit 1
-            fi
-          done
-          if [[ "$AZURE_AD_ISSUER_URI" != https://login.microsoftonline.com/*/v2.0 ]]; then
-            echo "AZURE_AD_ISSUER_URI must be the Entra ID v2 issuer." >&2
-            exit 1
-          fi
+          terraform init -backend=false -input=false
+          terraform plan -input=false -out=tfplan
+          terraform show -json tfplan | jq -e '
+            [.resource_changes[]?] as $changes |
+            (all($changes[]; (.change.actions | index("delete")) == null and (.change.actions | index("update")) == null)) and
+            all(["aws_instance.elegance_ec2", "aws_instance.elegance_rabbitmq_ec2", "aws_apigatewayv2_api.elegance_api"][];
+              . as $address | any($changes[]; .address == $address and .change.actions == ["create"]))
+          ' \
+            >/dev/null
+          bash scripts/cleanup-project-resources.sh
+          terraform apply -input=false -auto-approve tfplan
 
-      - name: Prepare SSH and application environment
+          backend_ip="$(terraform output -raw ec2_public_ip)"
+          rabbitmq_ip="$(terraform output -raw rabbitmq_public_ip)"
+          api_gateway_url="$(terraform output -raw api_gateway_url)"
+          private_key_path="$RUNNER_TEMP/elegance_backend.pem"
+          terraform output -raw ec2_private_key_pem > "$private_key_path"
+          chmod 600 "$private_key_path"
+
+          {
+            echo "backend_ip=$backend_ip"
+            echo "rabbitmq_ip=$rabbitmq_ip"
+            echo "api_gateway_url=$api_gateway_url"
+            echo "private_key_path=$private_key_path"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Recreated backend infrastructure"
+            echo "- Backend EC2 IP: \`$backend_ip\`"
+            echo "- RabbitMQ EC2 IP: \`$rabbitmq_ip\`"
+            echo "- API Gateway URL: \`$api_gateway_url\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare application environment and deploy services
         env:
-          BACKEND_EC2_SSH_KEY: ${{ secrets.BACKEND_EC2_SSH_KEY }}
+          BACKEND_EC2_HOST: ${{ steps.terraform.outputs.backend_ip }}
+          PRIVATE_KEY_PATH: ${{ steps.terraform.outputs.private_key_path }}
           DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
           MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
           MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
           AZURE_AD_ISSUER_URI: ${{ secrets.AZURE_AD_ISSUER_URI }}
           AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
-          SPRING_RABBITMQ_HOST: ${{ secrets.SPRING_RABBITMQ_HOST }}
+          SPRING_RABBITMQ_HOST: ${{ steps.terraform.outputs.rabbitmq_ip }}
           SPRING_RABBITMQ_PORT: ${{ vars.SPRING_RABBITMQ_PORT || '5672' }}
           SPRING_RABBITMQ_USERNAME: ${{ vars.SPRING_RABBITMQ_USERNAME || 'admin' }}
           SPRING_RABBITMQ_PASSWORD: ${{ secrets.SPRING_RABBITMQ_PASSWORD }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
-          printf '%s\n' "$BACKEND_EC2_SSH_KEY" > ~/.ssh/elegance_backend
-          chmod 600 ~/.ssh/elegance_backend
+          install -m 600 "$PRIVATE_KEY_PATH" ~/.ssh/elegance_backend
 
           : > /tmp/elegance.env
           for name in DB_PASSWORD MAIL_USERNAME MAIL_PASSWORD AZURE_AD_ISSUER_URI \
@@ -88,11 +151,6 @@ jobs:
           done
           chmod 600 /tmp/elegance.env
 
-      - name: Upload artifacts and restart services
-        env:
-          BACKEND_EC2_HOST: ${{ secrets.BACKEND_EC2_HOST }}
-        run: |
-          set -euo pipefail
           SSH=(ssh -i ~/.ssh/elegance_backend -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
           SCP=(scp -i ~/.ssh/elegance_backend -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
 

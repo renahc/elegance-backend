@@ -10,13 +10,6 @@ terraform {
     }
   }
 
-  backend "s3" {
-    bucket         = "elegance-tf-state-2026-gabriel"
-    key            = "elegance/ec2/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "elegance-tf-lock"
-  }
 }
 
 provider "aws" {
@@ -33,6 +26,12 @@ resource "tls_private_key" "ec2_key" {
 resource "aws_key_pair" "elegance_key" {
   key_name_prefix = "${var.app_name}-key-"
   public_key      = tls_private_key.ec2_key.public_key_openssh
+
+  tags = {
+    Name      = "${var.app_name}-backend-key"
+    Project   = "elegance"
+    ManagedBy = "terraform"
+  }
 }
 
 # ==========================================
@@ -66,7 +65,9 @@ resource "aws_security_group" "elegance_sg" {
   }
 
   tags = {
-    Name = "${var.app_name}-backend-sg"
+    Name      = "${var.app_name}-backend-sg"
+    Project   = "elegance"
+    ManagedBy = "terraform"
   }
 }
 
@@ -132,7 +133,9 @@ resource "aws_security_group" "rabbitmq_sg" {
   }
 
   tags = {
-    Name = "${var.app_name}-rabbitmq-sg"
+    Name      = "${var.app_name}-rabbitmq-sg"
+    Project   = "elegance"
+    ManagedBy = "terraform"
   }
 }
 
@@ -233,7 +236,9 @@ resource "aws_instance" "elegance_ec2" {
   )
 
   tags = {
-    Name = "elegance-backend-ec2"
+    Name      = "elegance-backend-ec2"
+    Project   = "elegance"
+    ManagedBy = "terraform"
   }
 }
 
@@ -326,7 +331,9 @@ resource "aws_instance" "elegance_rabbitmq_ec2" {
   )
 
   tags = {
-    Name = "elegance-rabbitmq-ec2"
+    Name      = "elegance-rabbitmq-ec2"
+    Project   = "elegance"
+    ManagedBy = "terraform"
   }
 }
 
@@ -345,7 +352,9 @@ resource "aws_apigatewayv2_api" "elegance_api" {
   }
 
   tags = {
-    Name = "${var.app_name}-api-gateway"
+    Name      = "${var.app_name}-api-gateway"
+    Project   = "elegance"
+    ManagedBy = "terraform"
   }
 }
 
