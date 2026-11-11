@@ -29,16 +29,6 @@ variable "mail_password" {
   sensitive = true
 }
 
-variable "rabbitmq_password" {
-  type      = string
-  sensitive = true
-}
-
-variable "rabbitmq_erlang_cookie" {
-  type      = string
-  sensitive = true
-}
-
 variable "azure_ad_issuer_uri" {
   description = "Issuer exacto de los access tokens de la API de Entra ID"
   type        = string

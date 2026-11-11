@@ -10,6 +10,7 @@ terraform {
     }
   }
 
+  /*
   backend "s3" {
     bucket         = "elegance-tf-state-2026-gabriel"
     key            = "elegance/ec2/terraform.tfstate"
@@ -17,6 +18,7 @@ terraform {
     encrypt        = true
     dynamodb_table = "elegance-tf-lock"
   }
+*/
 }
 
 provider "aws" {
@@ -214,7 +216,7 @@ resource "aws_instance" "elegance_ec2" {
     mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegance_services;" || true
     mysql -u root -e "CREATE DATABASE IF NOT EXISTS elegancebd;" || true
     
-    DB_PASS="$(printf '%s' '${base64encode(var.db_password)}' | base64 --decode)"
+    DB_PASS="${var.db_password}"
     if [ -n "$DB_PASS" ]; then
       mysql -u root -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$DB_PASS');" 2>/dev/null || \
       mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$DB_PASS';" 2>/dev/null || true
@@ -268,8 +270,7 @@ resource "aws_instance" "elegance_rabbitmq_ec2" {
     echo "[$(date)] Creando red Docker interna..."
     docker network create rabbitmq-cluster-net || true
 
-    COOKIE="$(printf '%s' '${base64encode(var.rabbitmq_erlang_cookie)}' | base64 --decode)"
-    RABBITMQ_PASSWORD="$(printf '%s' '${base64encode(var.rabbitmq_password)}' | base64 --decode)"
+    COOKIE="ELEGANCE_CLUSTER_SECRET_COOKIE_2026"
 
     # 1. Iniciar Nodo 1 (rabbitmq1)
     echo "[$(date)] Iniciando contenedor rabbitmq1..."
@@ -282,7 +283,7 @@ resource "aws_instance" "elegance_rabbitmq_ec2" {
       -p 15672:15672 \
       -e RABBITMQ_ERLANG_COOKIE=$COOKIE \
       -e RABBITMQ_DEFAULT_USER=admin \
-      -e RABBITMQ_DEFAULT_PASS="$RABBITMQ_PASSWORD" \
+      -e RABBITMQ_DEFAULT_PASS=admin123 \
       rabbitmq:3.13-management-alpine
 
     echo "[$(date)] Esperando que rabbitmq1 esté listo..."
