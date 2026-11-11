@@ -82,4 +82,6 @@ The test overlay runs a disposable RSA JWT issuer on localhost:19000. Never appl
 
 Upload sources and `.env` separately to `/opt/elegance`; upload the frontend build to `/opt/elegance/public`. Set `APP_DOMAIN` to a DNS name pointing at EC2. Run `ELEGANCE_CLUSTER=true bash scripts/deploy-streaming.sh` for the three-broker profile. Caddy serves the frontend and API over HTTPS. Broker and database ports stay internal; dashboard ports bind to loopback and can be reached through SSH forwarding.
 
-GitHub workflows validate PRs. Production deployment is an explicit workflow dispatch and uses `EC2_HOST`, `EC2_SSH_KEY`, `EC2_KNOWN_HOSTS` and optional `EC2_USER`. They do not recreate instances or run Terraform automatically. The environment file stays on the server. Public GitHub visibility, Microsoft app configuration and real-user login must be verified separately before handoff.
+GitHub Actions runs Maven, the Docker integration suite, and Terraform configuration validation on pushes to `kafka-ev3` and on pull requests. Terraform state and infrastructure changes are managed from the environment that owns the state.
+
+The deploy job targets the existing EC2 with three Kafka brokers and uses `EC2_HOST`, `EC2_SSH_KEY`, `EC2_KNOWN_HOSTS`, and optional `EC2_USER`. It runs on a deploy-enabled manual dispatch or on pushes to `kafka-ev3` when repository variable `KAFKA_EV3_AUTO_DEPLOY` is `true`. The `production` environment can require a reviewer. The runner needs SSH access within the instance security group, and `/opt/elegance/.env` stays on the server.
