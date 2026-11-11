@@ -11,7 +11,6 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
@@ -48,17 +47,6 @@ class ApiSecurityTest {
   @Test
   void publicCanReadCatalog() throws Exception {
     mvc.perform(get("/api/v1/services")).andExpect(status().isOk());
-  }
-
-  @Test
-  void preflightDoesNotRequireBearerToken() throws Exception {
-    mvc.perform(
-            options("/api/v1/services")
-                .header(HttpHeaders.ORIGIN, "https://98.93.83.155")
-                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
-                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization,content-type"))
-        .andExpect(status().isOk())
-        .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "*"));
   }
 
   @Test

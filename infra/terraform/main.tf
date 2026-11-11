@@ -341,7 +341,7 @@ resource "aws_apigatewayv2_api" "elegance_api" {
   cors_configuration {
     allow_origins = ["*"]
     allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
-    allow_headers = ["Authorization", "Content-Type", "X-Correlation-ID", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"]
+    allow_headers = ["Authorization", "Content-Type", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"]
     max_age       = 300
   }
 
@@ -535,37 +535,6 @@ resource "aws_apigatewayv2_integration" "rates_proxy_int" {
 # ==========================================
 # RUTAS DE API GATEWAY (CON AZURE AD JWT AUTHORIZER)
 # ==========================================
-
-# Los preflight del navegador no incluyen el bearer token. Las rutas ANY
-# protegidas con JWT los interceptan, por eso OPTIONS requiere rutas propias
-# sin authorizer y con integración para que Spring responda al preflight.
-locals {
-  cors_preflight_integrations = {
-    "OPTIONS /api/v1/appointments"           = aws_apigatewayv2_integration.appointments_root_int.id
-    "OPTIONS /api/v1/appointments/{proxy+}"  = aws_apigatewayv2_integration.appointments_proxy_int.id
-    "OPTIONS /api/v1/clients"                = aws_apigatewayv2_integration.clients_root_int.id
-    "OPTIONS /api/v1/clients/{proxy+}"       = aws_apigatewayv2_integration.clients_proxy_int.id
-    "OPTIONS /api/v1/stylists"               = aws_apigatewayv2_integration.stylists_root_int.id
-    "OPTIONS /api/v1/stylists/{proxy+}"      = aws_apigatewayv2_integration.stylists_proxy_int.id
-    "OPTIONS /api/v1/auth"                   = aws_apigatewayv2_integration.auth_root_int.id
-    "OPTIONS /api/v1/auth/{proxy+}"          = aws_apigatewayv2_integration.auth_proxy_int.id
-    "OPTIONS /api/v1/notifications"          = aws_apigatewayv2_integration.notifications_root_int.id
-    "OPTIONS /api/v1/notifications/{proxy+}" = aws_apigatewayv2_integration.notifications_proxy_int.id
-    "OPTIONS /api/v1/services"               = aws_apigatewayv2_integration.services_root_int.id
-    "OPTIONS /api/v1/services/{proxy+}"      = aws_apigatewayv2_integration.services_proxy_int.id
-    "OPTIONS /api/v1/rates"                  = aws_apigatewayv2_integration.rates_root_int.id
-    "OPTIONS /api/v1/rates/{proxy+}"         = aws_apigatewayv2_integration.rates_proxy_int.id
-  }
-}
-
-resource "aws_apigatewayv2_route" "cors_preflight" {
-  for_each = local.cors_preflight_integrations
-
-  api_id             = aws_apigatewayv2_api.elegance_api.id
-  route_key          = each.key
-  target             = "integrations/${each.value}"
-  authorization_type = "NONE"
-}
 
 # Appointments
 resource "aws_apigatewayv2_route" "appointments_root_route" {
