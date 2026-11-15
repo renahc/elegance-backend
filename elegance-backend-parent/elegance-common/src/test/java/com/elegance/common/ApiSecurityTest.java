@@ -55,6 +55,21 @@ class ApiSecurityTest {
   }
 
   @Test
+  void corsAllowsReadsFromAnyOrigin() throws Exception {
+    mvc.perform(get("/api/v1/services").header("Origin", "https://frontend.example"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Access-Control-Allow-Origin", "*"));
+
+    mvc.perform(
+            options("/api/v1/services")
+                .header("Origin", "https://frontend.example")
+                .header("Access-Control-Request-Method", "GET")
+                .header("Access-Control-Request-Headers", "authorization,content-type"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Access-Control-Allow-Origin", "*"));
+  }
+
+  @Test
   void publicCanReadApiDocumentation() throws Exception {
     mvc.perform(get("/swagger-ui.html")).andExpect(status().isOk());
     mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());

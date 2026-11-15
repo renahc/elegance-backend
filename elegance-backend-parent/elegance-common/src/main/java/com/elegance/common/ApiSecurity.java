@@ -71,10 +71,9 @@ public class ApiSecurity {
   }
 
   @Bean
-  CorsConfigurationSource corsConfigurationSource(
-      @Value("${CORS_ALLOWED_ORIGINS:https://localhost:5173}") String origins) {
+  CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration c = new CorsConfiguration();
-    c.setAllowedOrigins(Arrays.asList(origins.split(",")));
+    c.setAllowedOrigins(List.of("*"));
     c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     c.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-ID"));
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

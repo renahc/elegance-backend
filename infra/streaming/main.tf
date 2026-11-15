@@ -128,6 +128,13 @@ resource "aws_instance" "streaming" {
 resource "aws_apigatewayv2_api" "streaming" {
   name          = "elegance-streaming-http-api"
   protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_origins = ["*"]
+    allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    allow_headers = ["Authorization", "Content-Type", "X-Correlation-ID"]
+    max_age       = 300
+  }
 }
 
 resource "aws_apigatewayv2_integration" "streaming_root" {
