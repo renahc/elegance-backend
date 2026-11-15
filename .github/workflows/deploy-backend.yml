@@ -182,6 +182,7 @@ jobs:
           PUBLIC_BIND_ADDRESS: 0.0.0.0
           MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
           MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          SPRING_PROFILES_ACTIVE: demo
         run: |
           set -euo pipefail
           if [ -z "${RABBITMQ_PASSWORD:-}" ]; then
@@ -216,6 +217,7 @@ jobs:
               "PUBLIC_BIND_ADDRESS",
               "MAIL_USERNAME",
               "MAIL_PASSWORD",
+              "SPRING_PROFILES_ACTIVE",
           ):
               value = os.environ.get(key)
               if value:

@@ -4,6 +4,8 @@ import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -17,12 +19,26 @@ import org.springframework.web.cors.*;
 @EnableMethodSecurity
 public class ApiSecurity {
   @Bean
-  SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
+  SecurityFilterChain apiFilterChain(
+      HttpSecurity http, @Value("${ADMIN_EMAILS:}") String configuredAdminEmails)
+      throws Exception {
+    Set<String> adminEmails =
+        Arrays.stream(configuredAdminEmails.split(","))
+            .map(String::trim)
+            .filter(email -> !email.isEmpty())
+            .map(email -> email.toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
     JwtGrantedAuthoritiesConverter roles = new JwtGrantedAuthoritiesConverter();
     roles.setAuthoritiesClaimName("roles");
     roles.setAuthorityPrefix("ROLE_");
     JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-    converter.setJwtGrantedAuthoritiesConverter(roles);
+    converter.setJwtGrantedAuthoritiesConverter(
+        jwt -> {
+          Collection<GrantedAuthority> authorities = new ArrayList<>(roles.convert(jwt));
+          if (isAllowlistedAdmin(jwt, adminEmails))
+            authorities.add(new SimpleGrantedAuthority("ROLE_Admin"));
+          return authorities;
+        });
     return http.cors(c -> {})
         .csrf(c -> c.disable())
         .sessionManagement(c -> c.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -48,6 +64,16 @@ public class ApiSecurity {
                     .hasRole("Admin"))
         .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(converter)))
         .build();
+  }
+
+  private static boolean isAllowlistedAdmin(Jwt jwt, Set<String> adminEmails) {
+    if (adminEmails.isEmpty()) return false;
+    for (String claim : List.of("preferred_username", "upn", "email", "unique_name")) {
+      Object value = jwt.getClaims().get(claim);
+      if (value instanceof String email
+          && adminEmails.contains(email.trim().toLowerCase(Locale.ROOT))) return true;
+    }
+    return false;
   }
 
   @Bean
