@@ -32,6 +32,8 @@ public class ApiSecurity {
                     .permitAll()
                     .requestMatchers("/actuator/health", "/actuator/health/**")
                     .permitAll()
+                    .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
+                    .permitAll()
                     .requestMatchers(
                         HttpMethod.GET,
                         "/api/v1/services",

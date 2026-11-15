@@ -30,6 +30,11 @@ class ApiSecurityTest {
       return "ok";
     }
 
+    @GetMapping({"/swagger-ui.html", "/swagger-ui/index.html", "/v3/api-docs"})
+    String apiDocumentation() {
+      return "ok";
+    }
+
     @PostMapping("/api/v1/services")
     String write() {
       return "ok";
@@ -47,6 +52,13 @@ class ApiSecurityTest {
   @Test
   void publicCanReadCatalog() throws Exception {
     mvc.perform(get("/api/v1/services")).andExpect(status().isOk());
+  }
+
+  @Test
+  void publicCanReadApiDocumentation() throws Exception {
+    mvc.perform(get("/swagger-ui.html")).andExpect(status().isOk());
+    mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
+    mvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
   }
 
   @Test
