@@ -78,10 +78,10 @@ The test overlay runs a disposable RSA JWT issuer on localhost:19000. Never appl
 
 ## AWS
 
-`infra/streaming` provisions a separate Ubuntu EC2 and restricted security group without terminating existing instances. Terraform requires an existing SSH key name and administrator CIDR. Choose instance capacity after measuring the selected broker profile.
+`infra/streaming` provisions one Ubuntu EC2 for the current Docker Compose stack, including its three-broker Kafka profile. It is a single-host deployment, not EC2-level high availability. The deploy workflow creates a temporary SSH key and restricts SSH ingress to the GitHub runner's `/32` address.
 
-Upload sources and `.env` separately to `/opt/elegance`; upload the frontend build to `/opt/elegance/public`. Set `APP_DOMAIN` to a DNS name pointing at EC2. Run `ELEGANCE_CLUSTER=true bash scripts/deploy-streaming.sh` for the three-broker profile. Caddy serves the frontend and API over HTTPS. Broker and database ports stay internal; dashboard ports bind to loopback and can be reached through SSH forwarding.
+On each deploy to `kafka-ev3`, GitHub Actions terminates only the existing `elegance-streaming-ec2` instance and its `elegance-streaming-*` security groups in the default VPC, removes the deployment key pair, and provisions a fresh EC2. It then uploads the source and a generated `.env` and runs `scripts/deploy-streaming.sh`. Database and Kafka volumes are on that EC2, so replacing it loses their data. Other AWS Academy resources are not removed.
 
-GitHub Actions runs Maven, the Docker integration suite, and Terraform configuration validation on pushes to `kafka-ev3` and on pull requests. Terraform state and infrastructure changes are managed from the environment that owns the state.
+GitHub Actions runs Maven, the Docker integration suite, and Terraform configuration validation on pushes and pull requests. The deploy job requires the `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN` repository secrets. Optional configuration uses the `AWS_REGION`, `APP_DOMAIN`, and `CORS_ALLOWED_ORIGINS` repository variables; `APP_DOMAIN` defaults to HTTP on port 80. Azure AD and mail settings can be supplied as repository secrets; Azure AD defaults come from `.env.example`.
 
-The deploy job targets the existing EC2 with three Kafka brokers and uses `EC2_HOST`, `EC2_SSH_KEY`, `EC2_KNOWN_HOSTS`, and optional `EC2_USER`. It runs on a deploy-enabled manual dispatch or on pushes to `kafka-ev3` when repository variable `KAFKA_EV3_AUTO_DEPLOY` is `true`. The `production` environment can require a reviewer. The runner needs SSH access within the instance security group, and `/opt/elegance/.env` stays on the server.
+The deploy job runs on pushes to `kafka-ev3` or on a manual dispatch with `deploy` enabled. The `production` environment can require a reviewer.

@@ -56,19 +56,175 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Configure SSH
-        env:
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      - name: Prepare temporary SSH access
         run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-      - name: Upload validated source
-        env:
-          HOST: ${{ secrets.EC2_HOST }}
-          SSH_USER: ${{ vars.EC2_USER || 'ubuntu' }}
+          ssh-keygen -q -t rsa -b 4096 -N "" -f "$RUNNER_TEMP/deploy_key"
+          RUNNER_IP="$(curl --fail --silent https://checkip.amazonaws.com | tr -d '\r\n')"
+          test -n "$RUNNER_IP"
+          echo "TF_VAR_ssh_public_key=$(cat "$RUNNER_TEMP/deploy_key.pub")" >> "$GITHUB_ENV"
+          echo "TF_VAR_admin_cidr=$RUNNER_IP/32" >> "$GITHUB_ENV"
+          echo "TF_VAR_aws_region=${{ vars.AWS_REGION || 'us-east-1' }}" >> "$GITHUB_ENV"
+      - name: Remove previous streaming deployment resources
+        shell: bash
         run: |
-          rsync -az --exclude=.git --exclude=.env --exclude='**/target' --exclude='**/.terraform' --exclude='**/*.tfstate*' --exclude='**/*.pem' ./ "$SSH_USER@$HOST:/opt/elegance/"
-          ssh "$SSH_USER@$HOST" 'ELEGANCE_CLUSTER=true bash /opt/elegance/scripts/deploy-streaming.sh'
+          set -euo pipefail
+
+          INSTANCE_IDS="$(aws ec2 describe-instances \
+            --filters \
+              "Name=tag:Name,Values=elegance-streaming-ec2" \
+              "Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped" \
+            --query 'Reservations[].Instances[].InstanceId' \
+            --output text)"
+          if [ -n "$INSTANCE_IDS" ] && [ "$INSTANCE_IDS" != "None" ]; then
+            read -r -a INSTANCE_ID_ARRAY <<< "$INSTANCE_IDS"
+            aws ec2 terminate-instances --instance-ids "${INSTANCE_ID_ARRAY[@]}"
+            aws ec2 wait instance-terminated --instance-ids "${INSTANCE_ID_ARRAY[@]}"
+          fi
+
+          VPC_ID="$(aws ec2 describe-vpcs \
+            --filters "Name=isDefault,Values=true" \
+            --query 'Vpcs[0].VpcId' \
+            --output text)"
+          if [ -z "$VPC_ID" ] || [ "$VPC_ID" = "None" ]; then
+            echo "No default VPC found in the configured AWS region." >&2
+            exit 1
+          fi
+
+          SECURITY_GROUP_IDS="$(aws ec2 describe-security-groups \
+            --filters \
+              "Name=vpc-id,Values=$VPC_ID" \
+              "Name=group-name,Values=elegance-streaming-*" \
+            --query 'SecurityGroups[].GroupId' \
+            --output text)"
+          if [ -n "$SECURITY_GROUP_IDS" ] && [ "$SECURITY_GROUP_IDS" != "None" ]; then
+            read -r -a SECURITY_GROUP_ID_ARRAY <<< "$SECURITY_GROUP_IDS"
+            for security_group_id in "${SECURITY_GROUP_ID_ARRAY[@]}"; do
+              aws ec2 delete-security-group --group-id "$security_group_id"
+            done
+          fi
+
+          KEY_PAIR_IDS="$(aws ec2 describe-key-pairs \
+            --filters "Name=key-name,Values=elegance-streaming-github" \
+            --query 'KeyPairs[].KeyPairId' \
+            --output text)"
+          if [ -n "$KEY_PAIR_IDS" ] && [ "$KEY_PAIR_IDS" != "None" ]; then
+            read -r -a KEY_PAIR_ID_ARRAY <<< "$KEY_PAIR_IDS"
+            for key_pair_id in "${KEY_PAIR_ID_ARRAY[@]}"; do
+              aws ec2 delete-key-pair --key-pair-id "$key_pair_id"
+            done
+          fi
+      - name: Provision streaming EC2
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/streaming init -backend=false -lockfile=readonly
+          terraform -chdir=infra/streaming apply -auto-approve -input=false
+
+          echo "EC2_HOST=$(terraform -chdir=infra/streaming output -raw host)" >> "$GITHUB_ENV"
+          echo "EC2_INSTANCE_ID=$(terraform -chdir=infra/streaming output -raw instance_id)" >> "$GITHUB_ENV"
+          echo "EC2_USER=$(terraform -chdir=infra/streaming output -raw ssh_user)" >> "$GITHUB_ENV"
+      - name: Wait for EC2 and cloud-init
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ec2 wait instance-status-ok --instance-ids "$EC2_INSTANCE_ID"
+
+          READY=false
+          for attempt in $(seq 1 60); do
+            if ssh -i "$RUNNER_TEMP/deploy_key" \
+              -o BatchMode=yes \
+              -o ConnectTimeout=10 \
+              -o StrictHostKeyChecking=accept-new \
+              "$EC2_USER@$EC2_HOST" 'cloud-init status --wait'; then
+              READY=true
+              break
+            fi
+            echo "Waiting for SSH and EC2 initialization ($attempt/60)..."
+            sleep 10
+          done
+          if [ "$READY" != true ]; then
+            echo "EC2 did not finish initializing in time." >&2
+            exit 1
+          fi
+      - name: Create runtime environment and deploy
+        shell: bash
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+          RABBITMQ_COOKIE: ${{ secrets.RABBITMQ_COOKIE }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+          AZURE_AD_ISSUER_URI: ${{ secrets.AZURE_AD_ISSUER_URI }}
+          AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+          AZURE_AD_JWK_SET_URI: ${{ secrets.AZURE_AD_JWK_SET_URI }}
+          CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS || 'https://localhost:5173' }}
+          APP_DOMAIN: ${{ vars.APP_DOMAIN || ':80' }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -hex 32)}"
+          export RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(openssl rand -hex 32)}"
+          export RABBITMQ_COOKIE="${RABBITMQ_COOKIE:-$(openssl rand -hex 32)}"
+          export DASHBOARD_PASSWORD="${DASHBOARD_PASSWORD:-$(openssl rand -hex 32)}"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          values = {}
+          for line in Path(".env.example").read_text(encoding="utf-8").splitlines():
+              if line and not line.lstrip().startswith("#") and "=" in line:
+                  key, value = line.split("=", 1)
+                  values[key] = value
+
+          for key in (
+              "DB_PASSWORD",
+              "RABBITMQ_PASSWORD",
+              "RABBITMQ_COOKIE",
+              "DASHBOARD_PASSWORD",
+              "AZURE_AD_ISSUER_URI",
+              "AZURE_AD_CLIENT_ID",
+              "AZURE_AD_JWK_SET_URI",
+              "CORS_ALLOWED_ORIGINS",
+              "APP_DOMAIN",
+              "MAIL_USERNAME",
+              "MAIL_PASSWORD",
+          ):
+              value = os.environ.get(key)
+              if value:
+                  values[key] = value
+
+          values["KAFKA_REPLICATION_FACTOR"] = "3"
+
+          def quote(value):
+              value = value.replace("\\", "\\\\").replace('"', '\\"').replace("$", "$$")
+              value = value.replace("\n", "\\n").replace("\r", "\\r")
+              return f'"{value}"'
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "deploy.env"
+          path.write_text(
+              "".join(f"{key}={quote(value)}\n" for key, value in values.items()),
+              encoding="utf-8",
+          )
+          path.chmod(0o600)
+          PY
+
+          SSH_OPTIONS="-i $RUNNER_TEMP/deploy_key -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
+          rsync -az \
+            -e "ssh $SSH_OPTIONS" \
+            --exclude=.git \
+            --exclude=.env \
+            --exclude='**/target' \
+            --exclude='**/.terraform' \
+            --exclude='**/*.tfstate*' \
+            --exclude='**/*.pem' \
+            ./ "$EC2_USER@$EC2_HOST:/opt/elegance/"
+          scp $SSH_OPTIONS "$RUNNER_TEMP/deploy.env" "$EC2_USER@$EC2_HOST:/opt/elegance/.env"
+          ssh $SSH_OPTIONS "$EC2_USER@$EC2_HOST" \
+            'chmod 600 /opt/elegance/.env && ELEGANCE_CLUSTER=true bash /opt/elegance/scripts/deploy-streaming.sh'
