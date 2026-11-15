@@ -144,6 +144,7 @@ jobs:
           echo "EC2_HOST=$(terraform -chdir=infra/streaming output -raw host)" >> "$GITHUB_ENV"
           echo "EC2_INSTANCE_ID=$(terraform -chdir=infra/streaming output -raw instance_id)" >> "$GITHUB_ENV"
           echo "EC2_USER=$(terraform -chdir=infra/streaming output -raw ssh_user)" >> "$GITHUB_ENV"
+          echo "API_GATEWAY_URL=$(terraform -chdir=infra/streaming output -raw api_gateway_url)" >> "$GITHUB_ENV"
       - name: Wait for EC2 and cloud-init
         shell: bash
         run: |
@@ -262,7 +263,7 @@ jobs:
           else
             BACKEND_URL="https://$APP_DOMAIN"
           fi
-          API_URL="$BACKEND_URL/api/v1"
+          API_URL="$API_GATEWAY_URL/api/v1"
           SWAGGER_PORTS="8081,8082,8083,8084"
           RABBITMQ_PORTS="5672,15672"
           KAFKA_PORTS="29092,8090"
@@ -274,23 +275,37 @@ jobs:
             echo
             echo "| Service | Endpoint / port | Reachability |"
             echo "| --- | --- | --- |"
-            echo "| Backend through Caddy | $BACKEND_URL (80) | Public |"
-            echo "| REST API | $API_URL | Public |"
-            echo "| Appointment Swagger UI | http://$EC2_HOST:8081/swagger-ui.html | Public |"
-            echo "| User Swagger UI | http://$EC2_HOST:8082/swagger-ui.html | Public |"
-            echo "| Notification Swagger UI | http://$EC2_HOST:8083/swagger-ui.html | Public |"
-            echo "| Services Swagger UI | http://$EC2_HOST:8084/swagger-ui.html | Public |"
+            echo "| AWS API Gateway | [$API_GATEWAY_URL]($API_GATEWAY_URL) | Public |"
+            echo "| Backend through Caddy | [$BACKEND_URL]($BACKEND_URL) (80) | Public |"
+            echo "| REST API | [$API_URL]($API_URL) | Public through API Gateway |"
+            echo "| Appointment Swagger UI | [Open](http://$EC2_HOST:8081/swagger-ui.html) | Public |"
+            echo "| User Swagger UI | [Open](http://$EC2_HOST:8082/swagger-ui.html) | Public |"
+            echo "| Notification Swagger UI | [Open](http://$EC2_HOST:8083/swagger-ui.html) | Public |"
+            echo "| Services Swagger UI | [Open](http://$EC2_HOST:8084/swagger-ui.html) | Public |"
             echo "| RabbitMQ AMQP | 5672 | Docker network only |"
-            echo "| RabbitMQ Management UI | $RABBITMQ_UI_URL | Public; login required |"
+            echo "| RabbitMQ Management UI | [$RABBITMQ_UI_URL]($RABBITMQ_UI_URL) | Public; login required |"
             echo "| Kafka brokers | kafka1:29092, kafka2:29092, kafka3:29092 | Docker network only |"
-            echo "| Kafka UI | $KAFKA_UI_URL | Public; login required |"
-            echo "| AWS API Gateway | Not provisioned by this workflow | N/A |"
+            echo "| Kafka UI | [$KAFKA_UI_URL]($KAFKA_UI_URL) | Public; login required |"
             echo
             echo "Ports 8085-8087 are internal service ports; those services do not currently configure Swagger UI."
             echo "RabbitMQ Management and Kafka UI username: elegance. Passwords are configured in the RABBITMQ_PASSWORD and DASHBOARD_PASSWORD GitHub secrets; they are not printed here."
-            echo "Only the management UIs and Swagger ports are public. RabbitMQ AMQP and Kafka broker ports remain private to the Docker network."
+            echo "The API Gateway, Caddy/backend, Swagger ports, and management UIs are public; the EC2 ports remain directly reachable as well. RabbitMQ AMQP and Kafka broker ports remain private to the Docker network."
             echo "These public HTTP endpoints are intended for the short evaluation window; stop or terminate the EC2 after the demonstration."
           } >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "Deployment links:"
+            echo "API Gateway: $API_GATEWAY_URL"
+            echo "REST API: $API_URL"
+            echo "Backend: $BACKEND_URL"
+            echo "Appointment Swagger UI: http://$EC2_HOST:8081/swagger-ui.html"
+            echo "User Swagger UI: http://$EC2_HOST:8082/swagger-ui.html"
+            echo "Notification Swagger UI: http://$EC2_HOST:8083/swagger-ui.html"
+            echo "Services Swagger UI: http://$EC2_HOST:8084/swagger-ui.html"
+            echo "RabbitMQ Management UI: $RABBITMQ_UI_URL"
+            echo "Kafka UI: $KAFKA_UI_URL"
+            echo "EC2 host: $EC2_HOST"
+          }
 
           {
             echo "ec2_host=$EC2_HOST"
@@ -299,5 +314,5 @@ jobs:
             echo "swagger_ports=$SWAGGER_PORTS"
             echo "rabbitmq_ports=$RABBITMQ_PORTS"
             echo "kafka_ports=$KAFKA_PORTS"
-            echo "api_gateway=not-provisioned"
+            echo "api_gateway=$API_GATEWAY_URL"
           } >> "$GITHUB_OUTPUT"

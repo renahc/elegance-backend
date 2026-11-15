@@ -124,6 +124,46 @@ resource "aws_instance" "streaming" {
     Project = "elegance-backend-streaming"
   }
 }
+
+resource "aws_apigatewayv2_api" "streaming" {
+  name          = "elegance-streaming-http-api"
+  protocol_type = "HTTP"
+}
+
+resource "aws_apigatewayv2_integration" "streaming_root" {
+  api_id                 = aws_apigatewayv2_api.streaming.id
+  integration_type       = "HTTP_PROXY"
+  integration_method     = "ANY"
+  integration_uri        = "http://${aws_instance.streaming.public_ip}:80/"
+  payload_format_version = "1.0"
+}
+
+resource "aws_apigatewayv2_integration" "streaming_proxy" {
+  api_id                 = aws_apigatewayv2_api.streaming.id
+  integration_type       = "HTTP_PROXY"
+  integration_method     = "ANY"
+  integration_uri        = "http://${aws_instance.streaming.public_ip}:80/{proxy}"
+  payload_format_version = "1.0"
+}
+
+resource "aws_apigatewayv2_route" "streaming_root" {
+  api_id    = aws_apigatewayv2_api.streaming.id
+  route_key = "ANY /"
+  target    = "integrations/${aws_apigatewayv2_integration.streaming_root.id}"
+}
+
+resource "aws_apigatewayv2_route" "streaming_proxy" {
+  api_id    = aws_apigatewayv2_api.streaming.id
+  route_key = "ANY /{proxy+}"
+  target    = "integrations/${aws_apigatewayv2_integration.streaming_proxy.id}"
+}
+
+resource "aws_apigatewayv2_stage" "streaming" {
+  api_id      = aws_apigatewayv2_api.streaming.id
+  name        = "$default"
+  auto_deploy = true
+}
+
 output "host" {
   value = aws_instance.streaming.public_ip
 }
@@ -132,6 +172,10 @@ output "instance_id" {
 }
 output "ssh_user" {
   value = "ubuntu"
+}
+output "api_gateway_url" {
+  description = "Base URL del API Gateway HTTP para el backend"
+  value       = aws_apigatewayv2_stage.streaming.invoke_url
 }
 output "dashboard_tunnel" {
   value = "ssh -L 8090:127.0.0.1:8090 -L 15672:127.0.0.1:15672 ubuntu@${aws_instance.streaming.public_ip}"
