@@ -37,11 +37,12 @@
           "CMD",
           "rabbitmq-diagnostics",
           "-q",
-          "ping"
+          "check_running"
         ],
         "interval": "10s",
         "timeout": "10s",
-        "retries": 20
+        "retries": 20,
+        "start_period": "30s"
       },
       "restart": "unless-stopped",
       "ports": [
@@ -64,11 +65,12 @@
           "CMD",
           "rabbitmq-diagnostics",
           "-q",
-          "ping"
+          "check_running"
         ],
         "interval": "10s",
         "timeout": "10s",
-        "retries": 20
+        "retries": 20,
+        "start_period": "30s"
       },
       "restart": "unless-stopped"
     },
