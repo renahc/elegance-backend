@@ -56,6 +56,10 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
