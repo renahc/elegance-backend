@@ -52,6 +52,14 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.deploy) ||
       (github.event_name == 'push' && github.ref == 'refs/heads/kafka-ev3')
     needs: [test, terraform]
+    outputs:
+      ec2_host: ${{ steps.publish.outputs.ec2_host }}
+      backend_url: ${{ steps.publish.outputs.backend_url }}
+      api_url: ${{ steps.publish.outputs.api_url }}
+      swagger_ports: ${{ steps.publish.outputs.swagger_ports }}
+      rabbitmq_ports: ${{ steps.publish.outputs.rabbitmq_ports }}
+      kafka_ports: ${{ steps.publish.outputs.kafka_ports }}
+      api_gateway: ${{ steps.publish.outputs.api_gateway }}
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -232,3 +240,50 @@ jobs:
           scp $SSH_OPTIONS "$RUNNER_TEMP/deploy.env" "$EC2_USER@$EC2_HOST:/opt/elegance/.env"
           ssh $SSH_OPTIONS "$EC2_USER@$EC2_HOST" \
             'chmod 600 /opt/elegance/.env && ELEGANCE_CLUSTER=true bash /opt/elegance/scripts/deploy-streaming.sh'
+      - name: Publish deployment outputs
+        id: publish
+        if: success()
+        shell: bash
+        env:
+          APP_DOMAIN: ${{ vars.APP_DOMAIN || ':80' }}
+        run: |
+          if [ "$APP_DOMAIN" = ":80" ]; then
+            BACKEND_URL="http://$EC2_HOST"
+          else
+            BACKEND_URL="https://$APP_DOMAIN"
+          fi
+          API_URL="$BACKEND_URL/api/v1"
+          SWAGGER_PORTS="8081,8082,8083,8084"
+          RABBITMQ_PORTS="5672,15672"
+          KAFKA_PORTS="29092,8090"
+
+          {
+            echo "## Deployment endpoints"
+            echo
+            echo "| Service | Endpoint / port | Reachability |"
+            echo "| --- | --- | --- |"
+            echo "| Backend through Caddy | $BACKEND_URL (80) | Public |"
+            echo "| REST API | $API_URL | Public |"
+            echo "| Appointment Swagger UI | http://127.0.0.1:8081/swagger-ui.html | EC2 loopback only |"
+            echo "| User Swagger UI | http://127.0.0.1:8082/swagger-ui.html | EC2 loopback only |"
+            echo "| Notification Swagger UI | http://127.0.0.1:8083/swagger-ui.html | EC2 loopback only |"
+            echo "| Services Swagger UI | http://127.0.0.1:8084/swagger-ui.html | EC2 loopback only |"
+            echo "| RabbitMQ AMQP | 5672 | Docker network only |"
+            echo "| RabbitMQ Management UI | http://127.0.0.1:15672 | EC2 loopback only |"
+            echo "| Kafka brokers | kafka1:29092, kafka2:29092, kafka3:29092 | Docker network only |"
+            echo "| Kafka UI | http://127.0.0.1:8090 | EC2 loopback only |"
+            echo "| AWS API Gateway | Not provisioned by this workflow | N/A |"
+            echo
+            echo "Ports 8085-8087 are internal service ports; those services do not currently configure Swagger UI."
+            echo "Swagger, RabbitMQ, and Kafka ports are not exposed publicly. Accessing loopback-only ports requires a persistent SSH key or SSM; this workflow's SSH key is temporary."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "ec2_host=$EC2_HOST"
+            echo "backend_url=$BACKEND_URL"
+            echo "api_url=$API_URL"
+            echo "swagger_ports=$SWAGGER_PORTS"
+            echo "rabbitmq_ports=$RABBITMQ_PORTS"
+            echo "kafka_ports=$KAFKA_PORTS"
+            echo "api_gateway=not-provisioned"
+          } >> "$GITHUB_OUTPUT"
