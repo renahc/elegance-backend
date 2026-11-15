@@ -80,7 +80,9 @@ jobs:
           ssh-keygen -q -t rsa -b 4096 -N "" -f "$RUNNER_TEMP/deploy_key"
           RUNNER_IP="$(curl --fail --silent https://checkip.amazonaws.com | tr -d '\r\n')"
           test -n "$RUNNER_IP"
-          echo "TF_VAR_ssh_public_key=$(cat "$RUNNER_TEMP/deploy_key.pub")" >> "$GITHUB_ENV"
+          SSH_PUBLIC_KEY="$(cat "$RUNNER_TEMP/deploy_key.pub")"
+          echo "::add-mask::$SSH_PUBLIC_KEY"
+          echo "TF_VAR_ssh_public_key=$SSH_PUBLIC_KEY" >> "$GITHUB_ENV"
           echo "TF_VAR_admin_cidr=$RUNNER_IP/32" >> "$GITHUB_ENV"
           echo "TF_VAR_aws_region=${{ vars.AWS_REGION || 'us-east-1' }}" >> "$GITHUB_ENV"
       - name: Remove previous streaming deployment resources
@@ -177,14 +179,21 @@ jobs:
           AZURE_AD_JWK_SET_URI: ${{ secrets.AZURE_AD_JWK_SET_URI }}
           CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS || 'https://localhost:5173' }}
           APP_DOMAIN: ${{ vars.APP_DOMAIN || ':80' }}
+          PUBLIC_BIND_ADDRESS: 0.0.0.0
           MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
           MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
         run: |
           set -euo pipefail
+          if [ -z "${RABBITMQ_PASSWORD:-}" ]; then
+            echo "Configure the RABBITMQ_PASSWORD GitHub secret before deploying the public management UI." >&2
+            exit 1
+          fi
+          if [ -z "${DASHBOARD_PASSWORD:-}" ]; then
+            echo "Configure the DASHBOARD_PASSWORD GitHub secret before deploying the public Kafka UI." >&2
+            exit 1
+          fi
           export DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -hex 32)}"
-          export RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(openssl rand -hex 32)}"
           export RABBITMQ_COOKIE="${RABBITMQ_COOKIE:-$(openssl rand -hex 32)}"
-          export DASHBOARD_PASSWORD="${DASHBOARD_PASSWORD:-$(openssl rand -hex 32)}"
           python3 - <<'PY'
           import os
           from pathlib import Path
@@ -205,6 +214,7 @@ jobs:
               "AZURE_AD_JWK_SET_URI",
               "CORS_ALLOWED_ORIGINS",
               "APP_DOMAIN",
+              "PUBLIC_BIND_ADDRESS",
               "MAIL_USERNAME",
               "MAIL_PASSWORD",
           ):
@@ -256,6 +266,8 @@ jobs:
           SWAGGER_PORTS="8081,8082,8083,8084"
           RABBITMQ_PORTS="5672,15672"
           KAFKA_PORTS="29092,8090"
+          RABBITMQ_UI_URL="http://$EC2_HOST:15672"
+          KAFKA_UI_URL="http://$EC2_HOST:8090"
 
           {
             echo "## Deployment endpoints"
@@ -264,18 +276,20 @@ jobs:
             echo "| --- | --- | --- |"
             echo "| Backend through Caddy | $BACKEND_URL (80) | Public |"
             echo "| REST API | $API_URL | Public |"
-            echo "| Appointment Swagger UI | http://127.0.0.1:8081/swagger-ui.html | EC2 loopback only |"
-            echo "| User Swagger UI | http://127.0.0.1:8082/swagger-ui.html | EC2 loopback only |"
-            echo "| Notification Swagger UI | http://127.0.0.1:8083/swagger-ui.html | EC2 loopback only |"
-            echo "| Services Swagger UI | http://127.0.0.1:8084/swagger-ui.html | EC2 loopback only |"
+            echo "| Appointment Swagger UI | http://$EC2_HOST:8081/swagger-ui.html | Public |"
+            echo "| User Swagger UI | http://$EC2_HOST:8082/swagger-ui.html | Public |"
+            echo "| Notification Swagger UI | http://$EC2_HOST:8083/swagger-ui.html | Public |"
+            echo "| Services Swagger UI | http://$EC2_HOST:8084/swagger-ui.html | Public |"
             echo "| RabbitMQ AMQP | 5672 | Docker network only |"
-            echo "| RabbitMQ Management UI | http://127.0.0.1:15672 | EC2 loopback only |"
+            echo "| RabbitMQ Management UI | $RABBITMQ_UI_URL | Public; login required |"
             echo "| Kafka brokers | kafka1:29092, kafka2:29092, kafka3:29092 | Docker network only |"
-            echo "| Kafka UI | http://127.0.0.1:8090 | EC2 loopback only |"
+            echo "| Kafka UI | $KAFKA_UI_URL | Public; login required |"
             echo "| AWS API Gateway | Not provisioned by this workflow | N/A |"
             echo
             echo "Ports 8085-8087 are internal service ports; those services do not currently configure Swagger UI."
-            echo "Swagger, RabbitMQ, and Kafka ports are not exposed publicly. Accessing loopback-only ports requires a persistent SSH key or SSM; this workflow's SSH key is temporary."
+            echo "RabbitMQ Management and Kafka UI username: elegance. Passwords are configured in the RABBITMQ_PASSWORD and DASHBOARD_PASSWORD GitHub secrets; they are not printed here."
+            echo "Only the management UIs and Swagger ports are public. RabbitMQ AMQP and Kafka broker ports remain private to the Docker network."
+            echo "These public HTTP endpoints are intended for the short evaluation window; stop or terminate the EC2 after the demonstration."
           } >> "$GITHUB_STEP_SUMMARY"
 
           {
