@@ -263,6 +263,7 @@ jobs:
           else
             BACKEND_URL="https://$APP_DOMAIN"
           fi
+          API_GATEWAY_URL="${API_GATEWAY_URL%/}"
           API_URL="$API_GATEWAY_URL/api/v1"
           SWAGGER_PORTS="8081,8082,8083,8084"
           RABBITMQ_PORTS="5672,15672"

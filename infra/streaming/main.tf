@@ -175,7 +175,7 @@ output "ssh_user" {
 }
 output "api_gateway_url" {
   description = "Base URL del API Gateway HTTP para el backend"
-  value       = aws_apigatewayv2_stage.streaming.invoke_url
+  value       = trimsuffix(aws_apigatewayv2_stage.streaming.invoke_url, "/")
 }
 output "dashboard_tunnel" {
   value = "ssh -L 8090:127.0.0.1:8090 -L 15672:127.0.0.1:15672 ubuntu@${aws_instance.streaming.public_ip}"
