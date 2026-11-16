@@ -90,6 +90,16 @@ jobs:
         run: |
           set -euo pipefail
 
+          API_IDS="$(aws apigatewayv2 get-apis \
+            --query "Items[?Name=='elegance-streaming-http-api'].ApiId" \
+            --output text)"
+          if [ -n "$API_IDS" ] && [ "$API_IDS" != "None" ]; then
+            read -r -a API_ID_ARRAY <<< "$API_IDS"
+            for api_id in "${API_ID_ARRAY[@]}"; do
+              aws apigatewayv2 delete-api --api-id "$api_id"
+            done
+          fi
+
           INSTANCE_IDS="$(aws ec2 describe-instances \
             --filters \
               "Name=tag:Name,Values=elegance-streaming-ec2" \
