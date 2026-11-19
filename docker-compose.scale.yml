@@ -1,0 +1,5 @@
+# docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale audit-service=3
+# Audit instances have no published host port in this profile. Query through the web proxy.
+services:
+  audit-service:
+    ports: !reset []

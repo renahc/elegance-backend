@@ -1,12 +1,15 @@
 package com.elegance.user.controller;
 
-import com.elegance.user.model.StylistEntity;
-import com.elegance.user.repository.StylistRepository;
 import com.elegance.user.event.StylistCreatedEvent;
 import com.elegance.user.event.StylistUpdatedEvent;
 import com.elegance.user.event.StylistDeletedEvent;
+import com.elegance.user.model.StylistEntity;
+import com.elegance.user.repository.StylistRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
@@ -14,111 +17,137 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/stylists")
-@Tag(name = "Equipo & Estilistas", description = "Endpoints para consultar y gestionar el personal del salón")
+@Tag(
+    name = "Equipo & Estilistas",
+    description = "Endpoints para consultar y gestionar el personal del salón")
 public class StylistController {
 
-    private final StylistRepository stylistRepository;
-    private final ApplicationEventPublisher eventPublisher;
+  private final StylistRepository stylistRepository;
+  private final ApplicationEventPublisher eventPublisher;
 
-    @Autowired
-    public StylistController(StylistRepository stylistRepository, ApplicationEventPublisher eventPublisher) {
-        this.stylistRepository = stylistRepository;
-        this.eventPublisher = eventPublisher;
+  @Autowired
+  public StylistController(
+      StylistRepository stylistRepository, ApplicationEventPublisher eventPublisher) {
+    this.stylistRepository = stylistRepository;
+    this.eventPublisher = eventPublisher;
+  }
+
+  @GetMapping
+  @Operation(summary = "Obtener lista completa de estilistas")
+  public ResponseEntity<List<StylistEntity>> getAllStylists() {
+    return ResponseEntity.ok(stylistRepository.findAll());
+  }
+
+  @GetMapping("/{id}")
+  @Operation(summary = "Obtener estilista por ID")
+  public ResponseEntity<StylistEntity> getStylistById(@PathVariable String id) {
+    return stylistRepository
+        .findById(id)
+        .map(ResponseEntity::ok)
+        .orElse(ResponseEntity.notFound().build());
+  }
+
+  @PostMapping
+  @Transactional
+  @Operation(summary = "Registrar nuevo estilista")
+  public ResponseEntity<StylistEntity> createStylist(
+      @jakarta.validation.Valid @RequestBody StylistEntity stylist) {
+    if (stylist.getId() == null) {
+      stylist.setId("sty-" + UUID.randomUUID().toString().substring(0, 8));
+    }
+    if (stylist.getIsAvailable() == null) {
+      stylist.setIsAvailable(true);
+    }
+    if (stylist.getRating() == null) {
+      stylist.setRating(0.0);
+    }
+    if (stylist.getReviewsCount() == null) {
+      stylist.setReviewsCount(0);
+    }
+    if (stylist.getCompletedTodayCount() == null) {
+      stylist.setCompletedTodayCount(0);
     }
 
-    @GetMapping
-    @Operation(summary = "Obtener lista completa de estilistas")
-    public ResponseEntity<List<StylistEntity>> getAllStylists() {
-        return ResponseEntity.ok(stylistRepository.findAll());
+    StylistEntity saved = stylistRepository.save(stylist);
+    eventPublisher.publishEvent(
+        new StylistCreatedEvent(
+            saved.getId(),
+            saved.getName(),
+            saved.getSpecialty(),
+            Boolean.TRUE.equals(saved.getIsAvailable()),
+            LocalDateTime.now()));
+    return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+  }
+
+  @PutMapping("/{id}")
+  @Transactional
+  @Operation(summary = "Actualizar información de un estilista")
+  public ResponseEntity<StylistEntity> updateStylist(
+      @PathVariable String id,
+      @jakarta.validation.Valid @RequestBody StylistEntity stylistDetails) {
+    return stylistRepository
+        .findById(id)
+        .map(
+            stylist -> {
+              stylist.setName(stylistDetails.getName());
+              stylist.setRole(stylistDetails.getRole());
+              stylist.setSpecialty(stylistDetails.getSpecialty());
+              stylist.setAvatar(stylistDetails.getAvatar());
+              stylist.setRating(stylistDetails.getRating());
+              stylist.setReviewsCount(stylistDetails.getReviewsCount());
+              stylist.setIsAvailable(stylistDetails.getIsAvailable());
+              stylist.setShift(stylistDetails.getShift());
+              stylist.setCompletedTodayCount(stylistDetails.getCompletedTodayCount());
+
+              StylistEntity updated = stylistRepository.save(stylist);
+              eventPublisher.publishEvent(
+                  new StylistUpdatedEvent(
+                      updated.getId(),
+                      updated.getName(),
+                      updated.getSpecialty(),
+                      Boolean.TRUE.equals(updated.getIsAvailable()),
+                      LocalDateTime.now()));
+              return ResponseEntity.ok(updated);
+            })
+        .orElse(ResponseEntity.notFound().build());
+  }
+
+  @PutMapping("/{id}/availability")
+  @Transactional
+  @Operation(summary = "Cambiar disponibilidad de un estilista")
+  public ResponseEntity<StylistEntity> toggleAvailability(@PathVariable String id) {
+    return stylistRepository
+        .findById(id)
+        .map(
+            st -> {
+              st.setIsAvailable(!Boolean.TRUE.equals(st.getIsAvailable()));
+              StylistEntity updated = stylistRepository.save(st);
+              eventPublisher.publishEvent(
+                  new StylistUpdatedEvent(
+                      updated.getId(),
+                      updated.getName(),
+                      updated.getSpecialty(),
+                      Boolean.TRUE.equals(updated.getIsAvailable()),
+                      LocalDateTime.now()));
+              return ResponseEntity.ok(updated);
+            })
+        .orElse(ResponseEntity.notFound().build());
+  }
+
+  @DeleteMapping("/{id}")
+  @Transactional
+  @Operation(summary = "Eliminar estilista permanentemente")
+  public ResponseEntity<Void> deleteStylist(@PathVariable String id) {
+    if (stylistRepository.existsById(id)) {
+      stylistRepository.deleteById(id);
+      eventPublisher.publishEvent(
+          new StylistDeletedEvent(
+              id,
+              LocalDateTime.now()));
+      return ResponseEntity.noContent().build();
     }
-
-    @GetMapping("/{id}")
-    @Operation(summary = "Obtener estilista por ID")
-    public ResponseEntity<StylistEntity> getStylistById(@PathVariable String id) {
-        return stylistRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    @PostMapping
-    @Transactional
-    @Operation(summary = "Registrar nuevo estilista")
-    public ResponseEntity<StylistEntity> createStylist(@RequestBody StylistEntity stylist) {
-        if (stylist.getId() == null) {
-            stylist.setId("sty-" + UUID.randomUUID().toString().substring(0, 8));
-        }
-        if (stylist.getIsAvailable() == null) {
-            stylist.setIsAvailable(true);
-        }
-        if (stylist.getRating() == null) {
-            stylist.setRating(0.0);
-        }
-        if (stylist.getReviewsCount() == null) {
-            stylist.setReviewsCount(0);
-        }
-        if (stylist.getCompletedTodayCount() == null) {
-            stylist.setCompletedTodayCount(0);
-        }
-
-        StylistEntity saved = stylistRepository.save(stylist);
-
-        eventPublisher.publishEvent(new StylistCreatedEvent(saved.getId(), saved.getName(), saved.getSpecialty(), Boolean.TRUE.equals(saved.getIsAvailable()), LocalDateTime.now()));
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
-    }
-
-    @PutMapping("/{id}")
-    @Transactional
-    @Operation(summary = "Actualizar información de un estilista")
-    public ResponseEntity<StylistEntity> updateStylist(@PathVariable String id, @RequestBody StylistEntity stylistDetails) {
-        return stylistRepository.findById(id)
-                .map(stylist -> {
-                    stylist.setName(stylistDetails.getName());
-                    stylist.setRole(stylistDetails.getRole());
-                    stylist.setSpecialty(stylistDetails.getSpecialty());
-                    stylist.setAvatar(stylistDetails.getAvatar());
-                    stylist.setRating(stylistDetails.getRating());
-                    stylist.setReviewsCount(stylistDetails.getReviewsCount());
-                    stylist.setIsAvailable(stylistDetails.getIsAvailable());
-                    stylist.setShift(stylistDetails.getShift());
-                    stylist.setCompletedTodayCount(stylistDetails.getCompletedTodayCount());
-
-                    StylistEntity updated = stylistRepository.save(stylist);
-
-                    eventPublisher.publishEvent(new StylistUpdatedEvent(updated.getId(), updated.getName(), updated.getSpecialty(), Boolean.TRUE.equals(updated.getIsAvailable()), LocalDateTime.now()));
-
-                    return ResponseEntity.ok(updated);
-                })
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    @PutMapping("/{id}/availability")
-    @Operation(summary = "Cambiar disponibilidad de un estilista")
-    public ResponseEntity<StylistEntity> toggleAvailability(@PathVariable String id) {
-        return stylistRepository.findById(id)
-                .map(st -> {
-                    st.setIsAvailable(!Boolean.TRUE.equals(st.getIsAvailable()));
-                    StylistEntity saved = stylistRepository.save(st);
-                    eventPublisher.publishEvent(new StylistUpdatedEvent(saved.getId(), saved.getName(), saved.getSpecialty(), Boolean.TRUE.equals(saved.getIsAvailable()), LocalDateTime.now()));
-                    return ResponseEntity.ok(saved);
-                })
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    @DeleteMapping("/{id}")
-    @Operation(summary = "Eliminar estilista permanentemente")
-    public ResponseEntity<Void> deleteStylist(@PathVariable String id) {
-        if (stylistRepository.existsById(id)) {
-            stylistRepository.deleteById(id);
-            eventPublisher.publishEvent(new StylistDeletedEvent(id, LocalDateTime.now()));
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.notFound().build();
-    }
+    return ResponseEntity.notFound().build();
+  }
 }

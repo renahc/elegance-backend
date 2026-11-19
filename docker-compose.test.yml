@@ -1,0 +1,144 @@
+{
+  "services": {
+    "test-issuer": {
+      "image": "node:22-alpine",
+      "volumes": [
+        "./scripts/test/issuer.mjs:/issuer.mjs:ro"
+      ],
+      "command": [
+        "node",
+        "/issuer.mjs"
+      ],
+      "ports": [
+        "127.0.0.1:19000:19000"
+      ]
+    },
+    "user-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      },
+      "environment": {
+        "AZURE_AD_ISSUER_URI": "http://elegance-test-issuer",
+        "AZURE_AD_CLIENT_ID": "elegance-integration-api",
+        "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
+        "SPRING_PROFILES_ACTIVE": "demo",
+        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+      },
+      "depends_on": {
+        "test-issuer": {
+          "condition": "service_started"
+        }
+      }
+    },
+    "appointment-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      },
+      "environment": {
+        "AZURE_AD_ISSUER_URI": "http://elegance-test-issuer",
+        "AZURE_AD_CLIENT_ID": "elegance-integration-api",
+        "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
+        "SPRING_PROFILES_ACTIVE": "demo",
+        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+      },
+      "depends_on": {
+        "test-issuer": {
+          "condition": "service_started"
+        }
+      }
+    },
+    "notification-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      },
+      "environment": {
+        "AZURE_AD_ISSUER_URI": "http://elegance-test-issuer",
+        "AZURE_AD_CLIENT_ID": "elegance-integration-api",
+        "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
+        "SPRING_PROFILES_ACTIVE": "demo",
+        "JAVA_TOOL_OPTIONS": "-Xmx256m",
+        "MANAGEMENT_HEALTH_MAIL_ENABLED": "false"
+      },
+      "depends_on": {
+        "test-issuer": {
+          "condition": "service_started"
+        }
+      }
+    },
+    "services-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      },
+      "environment": {
+        "AZURE_AD_ISSUER_URI": "http://elegance-test-issuer",
+        "AZURE_AD_CLIENT_ID": "elegance-integration-api",
+        "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
+        "SPRING_PROFILES_ACTIVE": "demo",
+        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+      },
+      "depends_on": {
+        "test-issuer": {
+          "condition": "service_started"
+        }
+      }
+    },
+    "analytics-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      },
+      "environment": {
+        "AZURE_AD_ISSUER_URI": "http://elegance-test-issuer",
+        "AZURE_AD_CLIENT_ID": "elegance-integration-api",
+        "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
+        "SPRING_PROFILES_ACTIVE": "demo",
+        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+      },
+      "depends_on": {
+        "test-issuer": {
+          "condition": "service_started"
+        }
+      }
+    },
+    "audit-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      },
+      "environment": {
+        "AZURE_AD_ISSUER_URI": "http://elegance-test-issuer",
+        "AZURE_AD_CLIENT_ID": "elegance-integration-api",
+        "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
+        "SPRING_PROFILES_ACTIVE": "demo",
+        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+      },
+      "depends_on": {
+        "test-issuer": {
+          "condition": "service_started"
+        }
+      }
+    },
+    "kafka-admin-service": {
+      "build": {
+        "context": "./elegance-backend-parent",
+        "dockerfile": "../docker/Dockerfile.prebuilt"
+      },
+      "environment": {
+        "AZURE_AD_ISSUER_URI": "http://elegance-test-issuer",
+        "AZURE_AD_CLIENT_ID": "elegance-integration-api",
+        "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
+        "SPRING_PROFILES_ACTIVE": "demo",
+        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+      },
+      "depends_on": {
+        "test-issuer": {
+          "condition": "service_started"
+        }
+      }
+    }
+  }
+}

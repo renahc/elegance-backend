@@ -1,63 +1,136 @@
 package com.elegance.appointment.dto;
 
 public class AppointmentRequest {
-    private String clientId;
-    private String clientName;
-    private String clientAvatar;
-    private String serviceId;
-    private String serviceName;
-    private String serviceCategory;
-    private String stylistId;
-    private String stylistName;
-    private String date;
-    private String time;
-    private Integer durationMinutes;
-    private Integer price;
-    private String notes;
-    private boolean simulateError;
+  private String clientId;
+  private String clientName;
+  private String clientAvatar;
+  @jakarta.validation.constraints.NotBlank private String serviceId;
+  private String serviceName;
+  private String serviceCategory;
+  @jakarta.validation.constraints.NotBlank private String stylistId;
+  private String stylistName;
+  @jakarta.validation.constraints.NotBlank private String date;
+  @jakarta.validation.constraints.NotBlank private String time;
+  private Integer durationMinutes;
+  private Integer price;
 
-    public AppointmentRequest() {}
+  @jakarta.validation.constraints.Size(max = 1000)
+  private String notes;
 
-    // Getters y Setters manuales
-    public String getClientId() { return clientId; }
-    public void setClientId(String clientId) { this.clientId = clientId; }
+  private boolean simulateError;
 
-    public String getClientName() { return clientName; }
-    public void setClientName(String clientName) { this.clientName = clientName; }
+  public AppointmentRequest() {}
 
-    public String getClientAvatar() { return clientAvatar; }
-    public void setClientAvatar(String clientAvatar) { this.clientAvatar = clientAvatar; }
+  // Getters y Setters manuales
+  public String getClientId() {
+    return clientId;
+  }
 
-    public String getServiceId() { return serviceId; }
-    public void setServiceId(String serviceId) { this.serviceId = serviceId; }
+  public void setClientId(String clientId) {
+    this.clientId = clientId;
+  }
 
-    public String getServiceName() { return serviceName; }
-    public void setServiceName(String serviceName) { this.serviceName = serviceName; }
+  public String getClientName() {
+    return clientName;
+  }
 
-    public String getServiceCategory() { return serviceCategory; }
-    public void setServiceCategory(String serviceCategory) { this.serviceCategory = serviceCategory; }
+  public void setClientName(String clientName) {
+    this.clientName = clientName;
+  }
 
-    public String getStylistId() { return stylistId; }
-    public void setStylistId(String stylistId) { this.stylistId = stylistId; }
+  public String getClientAvatar() {
+    return clientAvatar;
+  }
 
-    public String getStylistName() { return stylistName; }
-    public void setStylistName(String stylistName) { this.stylistName = stylistName; }
+  public void setClientAvatar(String clientAvatar) {
+    this.clientAvatar = clientAvatar;
+  }
 
-    public String getDate() { return date; }
-    public void setDate(String date) { this.date = date; }
+  public String getServiceId() {
+    return serviceId;
+  }
 
-    public String getTime() { return time; }
-    public void setTime(String time) { this.time = time; }
+  public void setServiceId(String serviceId) {
+    this.serviceId = serviceId;
+  }
 
-    public Integer getDurationMinutes() { return durationMinutes; }
-    public void setDurationMinutes(Integer durationMinutes) { this.durationMinutes = durationMinutes; }
+  public String getServiceName() {
+    return serviceName;
+  }
 
-    public Integer getPrice() { return price; }
-    public void setPrice(Integer price) { this.price = price; }
+  public void setServiceName(String serviceName) {
+    this.serviceName = serviceName;
+  }
 
-    public String getNotes() { return notes; }
-    public void setNotes(String notes) { this.notes = notes; }
+  public String getServiceCategory() {
+    return serviceCategory;
+  }
 
-    public boolean isSimulateError() { return simulateError; }
-    public void setSimulateError(boolean simulateError) { this.simulateError = simulateError; }
+  public void setServiceCategory(String serviceCategory) {
+    this.serviceCategory = serviceCategory;
+  }
+
+  public String getStylistId() {
+    return stylistId;
+  }
+
+  public void setStylistId(String stylistId) {
+    this.stylistId = stylistId;
+  }
+
+  public String getStylistName() {
+    return stylistName;
+  }
+
+  public void setStylistName(String stylistName) {
+    this.stylistName = stylistName;
+  }
+
+  public String getDate() {
+    return date;
+  }
+
+  public void setDate(String date) {
+    this.date = date;
+  }
+
+  public String getTime() {
+    return time;
+  }
+
+  public void setTime(String time) {
+    this.time = time;
+  }
+
+  public Integer getDurationMinutes() {
+    return durationMinutes;
+  }
+
+  public void setDurationMinutes(Integer durationMinutes) {
+    this.durationMinutes = durationMinutes;
+  }
+
+  public Integer getPrice() {
+    return price;
+  }
+
+  public void setPrice(Integer price) {
+    this.price = price;
+  }
+
+  public String getNotes() {
+    return notes;
+  }
+
+  public void setNotes(String notes) {
+    this.notes = notes;
+  }
+
+  public boolean isSimulateError() {
+    return simulateError;
+  }
+
+  public void setSimulateError(boolean simulateError) {
+    this.simulateError = simulateError;
+  }
 }

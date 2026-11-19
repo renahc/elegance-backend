@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SalonEvent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "schemaVersion",
+    "correlationId",
+    "occurredAt",
+    "appointmentId",
+    "appointmentVersion",
+    "serviceId",
+    "serviceCategory",
+    "stylistId",
+    "date",
+    "time",
+    "status",
+    "amount",
+    "currency",
+    "durationMinutes"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eventType": {
+      "enum": [
+        "CREATED",
+        "STATUS_UPDATED",
+        "COMPLETED"
+      ]
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "appointmentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "appointmentVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "serviceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "serviceCategory": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stylistId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "time": {
+      "type": "string"
+    },
+    "previousStatus": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "confirmada",
+        "en_proceso",
+        "completada",
+        "cancelada"
+      ]
+    },
+    "amount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "currency": {
+      "const": "CLP"
+    },
+    "durationMinutes": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}
