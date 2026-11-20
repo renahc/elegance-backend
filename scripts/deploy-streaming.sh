@@ -5,7 +5,10 @@ test -f .env || { echo "Falta .env en el servidor" >&2; exit 1; }
 chmod 600 .env
 files=(-f docker-compose.yml)
 if [ "${ELEGANCE_CLUSTER:-false}" = true ]; then files+=(-f docker-compose.cluster.yml); fi
+if [ "${ELEGANCE_PREBUILT:-false}" = true ]; then files+=(-f docker-compose.prebuilt.yml); fi
 docker compose "${files[@]}" --profile web config --quiet
+docker compose "${files[@]}" --profile web config --format json | python3 scripts/configure-frontend.py
+if [ "${ELEGANCE_CLUSTER:-false}" = true ]; then bash scripts/migrate-zookeeper.sh; fi
 docker compose "${files[@]}" --profile web up -d --build --remove-orphans
 deadline=$((SECONDS + 600))
 for port in 8081 8082 8083 8084 8085 8086 8087; do

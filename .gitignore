@@ -21,3 +21,5 @@ target/
 __pycache__/
 *.pyc
 public/
+
+backups/

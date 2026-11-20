@@ -3,12 +3,20 @@
     "kafka1": {
       "image": "confluentinc/cp-kafka:7.9.0",
       "hostname": "kafka1",
-      "depends_on": [
-        "zookeeper"
-      ],
+      "depends_on": {
+        "zookeeper": {
+          "condition": "service_healthy"
+        },
+        "zookeeper2": {
+          "condition": "service_healthy"
+        },
+        "zookeeper3": {
+          "condition": "service_healthy"
+        }
+      },
       "environment": {
         "KAFKA_BROKER_ID": 1,
-        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper:2181",
+        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper:2181,zookeeper2:2181,zookeeper3:2181",
         "KAFKA_LISTENERS": "INTERNAL://0.0.0.0:29092",
         "KAFKA_ADVERTISED_LISTENERS": "INTERNAL://kafka1:29092",
         "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "INTERNAL:PLAINTEXT",
@@ -38,12 +46,20 @@
     "kafka2": {
       "image": "confluentinc/cp-kafka:7.9.0",
       "hostname": "kafka2",
-      "depends_on": [
-        "zookeeper"
-      ],
+      "depends_on": {
+        "zookeeper": {
+          "condition": "service_healthy"
+        },
+        "zookeeper2": {
+          "condition": "service_healthy"
+        },
+        "zookeeper3": {
+          "condition": "service_healthy"
+        }
+      },
       "environment": {
         "KAFKA_BROKER_ID": 2,
-        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper:2181",
+        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper:2181,zookeeper2:2181,zookeeper3:2181",
         "KAFKA_LISTENERS": "INTERNAL://0.0.0.0:29092",
         "KAFKA_ADVERTISED_LISTENERS": "INTERNAL://kafka2:29092",
         "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "INTERNAL:PLAINTEXT",
@@ -73,12 +89,20 @@
     "kafka3": {
       "image": "confluentinc/cp-kafka:7.9.0",
       "hostname": "kafka3",
-      "depends_on": [
-        "zookeeper"
-      ],
+      "depends_on": {
+        "zookeeper": {
+          "condition": "service_healthy"
+        },
+        "zookeeper2": {
+          "condition": "service_healthy"
+        },
+        "zookeeper3": {
+          "condition": "service_healthy"
+        }
+      },
       "environment": {
         "KAFKA_BROKER_ID": 3,
-        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper:2181",
+        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper:2181,zookeeper2:2181,zookeeper3:2181",
         "KAFKA_LISTENERS": "INTERNAL://0.0.0.0:29092",
         "KAFKA_ADVERTISED_LISTENERS": "INTERNAL://kafka3:29092",
         "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "INTERNAL:PLAINTEXT",
@@ -149,10 +173,92 @@
       "environment": {
         "KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS": "kafka1:29092,kafka2:29092,kafka3:29092"
       }
+    },
+    "zookeeper": {
+      "image": "confluentinc/cp-zookeeper:7.9.0",
+      "hostname": "zookeeper",
+      "environment": {
+        "ZOOKEEPER_CLIENT_PORT": 2181,
+        "ZOOKEEPER_TICK_TIME": 2000,
+        "ZOOKEEPER_SERVER_ID": 1,
+        "ZOOKEEPER_SERVERS": "zookeeper:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888",
+        "ZOOKEEPER_4LW_COMMANDS_WHITELIST": "ruok,srvr,mntr",
+        "KAFKA_HEAP_OPTS": "-Xms64m -Xmx256m"
+      },
+      "volumes": [
+        "zookeeper-data:/var/lib/zookeeper/data",
+        "zookeeper-log:/var/lib/zookeeper/log"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "echo srvr | nc -w 2 localhost 2181 | grep -Eq 'Mode: (leader|follower)'"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 30
+      },
+      "restart": "unless-stopped"
+    },
+    "zookeeper2": {
+      "image": "confluentinc/cp-zookeeper:7.9.0",
+      "hostname": "zookeeper2",
+      "environment": {
+        "ZOOKEEPER_CLIENT_PORT": 2181,
+        "ZOOKEEPER_TICK_TIME": 2000,
+        "ZOOKEEPER_SERVER_ID": 2,
+        "ZOOKEEPER_SERVERS": "zookeeper:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888",
+        "ZOOKEEPER_4LW_COMMANDS_WHITELIST": "ruok,srvr,mntr",
+        "KAFKA_HEAP_OPTS": "-Xms64m -Xmx256m"
+      },
+      "volumes": [
+        "zookeeper2-data:/var/lib/zookeeper/data",
+        "zookeeper2-log:/var/lib/zookeeper/log"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "echo srvr | nc -w 2 localhost 2181 | grep -Eq 'Mode: (leader|follower)'"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 30
+      },
+      "restart": "unless-stopped"
+    },
+    "zookeeper3": {
+      "image": "confluentinc/cp-zookeeper:7.9.0",
+      "hostname": "zookeeper3",
+      "environment": {
+        "ZOOKEEPER_CLIENT_PORT": 2181,
+        "ZOOKEEPER_TICK_TIME": 2000,
+        "ZOOKEEPER_SERVER_ID": 3,
+        "ZOOKEEPER_SERVERS": "zookeeper:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888",
+        "ZOOKEEPER_4LW_COMMANDS_WHITELIST": "ruok,srvr,mntr",
+        "KAFKA_HEAP_OPTS": "-Xms64m -Xmx256m"
+      },
+      "volumes": [
+        "zookeeper3-data:/var/lib/zookeeper/data",
+        "zookeeper3-log:/var/lib/zookeeper/log"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "echo srvr | nc -w 2 localhost 2181 | grep -Eq 'Mode: (leader|follower)'"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 30
+      },
+      "restart": "unless-stopped"
     }
   },
   "volumes": {
     "kafka2-data": null,
-    "kafka3-data": null
+    "kafka3-data": null,
+    "zookeeper2-data": null,
+    "zookeeper2-log": null,
+    "zookeeper3-data": null,
+    "zookeeper3-log": null
   }
 }

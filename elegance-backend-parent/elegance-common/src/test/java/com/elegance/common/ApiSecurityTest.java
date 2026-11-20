@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 @WebMvcTest(ApiSecurityTest.Endpoints.class)
 @Import({ApiSecurity.class, ApiSecurityTest.Endpoints.class})
-@TestPropertySource(properties = "ADMIN_EMAILS=ga.hernandezl@duocuc.cl")
+@TestPropertySource(properties = "ELEGANCE_ADMIN_OBJECT_ID=allowed-admin,second-admin")
 class ApiSecurityTest {
   @SpringBootConfiguration
   @EnableAutoConfiguration
@@ -97,12 +97,13 @@ class ApiSecurityTest {
         .andExpect(status().isOk());
   }
 
-  @Test
-  void allowlistedEntraEmailCanWrite() throws Exception {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"allowed-admin", "second-admin"})
+  void configuredObjectIdCanWrite(String objectId) throws Exception {
     Jwt token =
         Jwt.withTokenValue("allowlisted")
             .header("alg", "none")
-            .claim("preferred_username", "GA.HERNANDEZL@DUOCUC.CL")
+            .claim("oid", objectId)
             .build();
     org.mockito.Mockito.when(decoder.decode("allowlisted")).thenReturn(token);
 
@@ -111,15 +112,39 @@ class ApiSecurityTest {
   }
 
   @Test
-  void otherEntraEmailCannotWrite() throws Exception {
+  void otherObjectIdCannotWrite() throws Exception {
     Jwt token =
         Jwt.withTokenValue("not-allowlisted")
             .header("alg", "none")
-            .claim("preferred_username", "other@example.com")
+            .claim("oid", "another-user")
+            .claim("roles", java.util.List.of("Admin"))
             .build();
     org.mockito.Mockito.when(decoder.decode("not-allowlisted")).thenReturn(token);
 
     mvc.perform(post("/api/v1/services").header("Authorization", "Bearer not-allowlisted"))
+        .andExpect(status().isForbidden());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"preferred_username", "upn"})
+  void configuredMicrosoftUsernameCanWrite(String claim) throws Exception {
+    Jwt token = Jwt.withTokenValue("username-admin")
+        .header("alg", "none")
+        .claim(claim, "RE.HERRERAC@DUOCUC.CL")
+        .build();
+    org.mockito.Mockito.when(decoder.decode("username-admin")).thenReturn(token);
+    mvc.perform(post("/api/v1/services").header("Authorization", "Bearer username-admin"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void usernameMustMatchExactly() throws Exception {
+    Jwt token = Jwt.withTokenValue("lookalike")
+        .header("alg", "none")
+        .claim("preferred_username", "re.herrerac@duocuc.cl.example.invalid")
+        .build();
+    org.mockito.Mockito.when(decoder.decode("lookalike")).thenReturn(token);
+    mvc.perform(post("/api/v1/services").header("Authorization", "Bearer lookalike"))
         .andExpect(status().isForbidden());
   }
 

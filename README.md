@@ -55,7 +55,7 @@ Statistics represent events received by this pipeline. They do not automatically
 
 ## Security
 
-Only catalog/stylist reads and health checks are public. Other business operations require a signed, unexpired JWT with matching issuer and audience. Administration requires an Entra app role whose value is exactly `Admin`. Clients can access only their own reservations and `/api/v1/clients/me`. Do not use Microsoft Graph tokens for this API; request its `access_as_user` scope.
+Only catalog/stylist reads and health checks are public. Other business operations require a signed, unexpired JWT with matching issuer and audience. Administration is assigned to verified token object IDs in `ELEGANCE_ADMIN_OBJECT_ID` or the exact Microsoft username in `ELEGANCE_ADMIN_USERNAME`. Clients can access only their own reservations and `/api/v1/clients/me`. Do not use Microsoft Graph tokens for this API; request its `access_as_user` scope.
 
 `AZURE_AD_ISSUER_URI` must match the actual API token issuer (v1 or v2), and `AZURE_AD_JWK_SET_URI` must match the tenant. No authentication bypass is enabled in the normal compose file.
 
@@ -78,12 +78,14 @@ The test overlay runs a disposable RSA JWT issuer on localhost:19000. Never appl
 
 ## AWS
 
-`infra/streaming` provisions one Ubuntu EC2 for the current Docker Compose stack, including its three-broker Kafka profile. It is a single-host deployment, not EC2-level high availability. The deploy workflow creates a temporary SSH key and restricts SSH ingress to the GitHub runner's `/32` address.
+The cluster overlay runs three ZooKeeper members and three Kafka brokers. Deployment migrates the existing standalone ZooKeeper metadata into the joining members after saving an offline backup in `backups/`. Keep that backup until migration and topic checks pass.
 
-On each deploy to `kafka-ev3`, GitHub Actions terminates only the existing `elegance-streaming-ec2` instance and its `elegance-streaming-*` security groups in the default VPC, removes the deployment key pair, and provisions a fresh EC2. It then uploads the source and a generated `.env` and runs `scripts/deploy-streaming.sh`. Database and Kafka volumes are on that EC2, so replacing it loses their data. Other AWS Academy resources are not removed.
+`infra/streaming` provisions the EC2 infrastructure and calls `infra/gateway`. To add a gateway to an existing EC2, use `infra/gateway` independently with `backend_domain` set to the HTTPS domain served by Caddy. Keep each Terraform state with the directory used to create its resources.
 
-For evaluation, the deployment sets `PUBLIC_BIND_ADDRESS=0.0.0.0` and exposes Swagger on ports 8081-8084, RabbitMQ Management on 15672, and Kafka UI on 8090 to the public internet. RabbitMQ and Kafka UI require the `RABBITMQ_PASSWORD` and `DASHBOARD_PASSWORD` GitHub secrets (username `elegance`). AMQP and Kafka broker ports remain private. These HTTP endpoints are intended only for the short evaluation window; stop or terminate the EC2 afterwards.
+API Gateway verifies Entra v2 access tokens and requires the `access_as_user` scope on protected API routes. Configure the API registration's `api.requestedAccessTokenVersion` as 2 and set the backend's `AZURE_AD_ISSUER_URI` to `https://login.microsoftonline.com/<tenant>/v2.0`. Public catalog GET routes remain available to signed-out users.
 
-GitHub Actions runs Maven, the Docker integration suite, and Terraform configuration validation on pushes and pull requests. The deploy job requires the `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN` repository secrets. Optional configuration uses the `AWS_REGION` and `APP_DOMAIN` repository variables; `APP_DOMAIN` defaults to HTTP on port 80. The API accepts browser requests from any origin, while protected endpoints continue to require Azure AD JWTs. Azure AD and mail settings can be supplied as repository secrets; Azure AD defaults come from `.env.example`.
+Set `APP_DOMAIN` and `API_GATEWAY_URL` in the server's `.env`. Deployment writes `public/app-config.json` so the frontend calls the gateway. Register the frontend origin, including the gateway URL when it serves the frontend, as an Entra SPA redirect URI.
 
-The deploy job runs on pushes to `kafka-ev3` or on a manual dispatch with `deploy` enabled. The `production` environment can require a reviewer.
+Run `ELEGANCE_CLUSTER=true bash scripts/deploy-streaming.sh` on the existing server. Use `ELEGANCE_PREBUILT=true` when the verified JARs have already been uploaded. The GitHub deployment workflow uses `EC2_HOST`, `EC2_SSH_KEY`, `EC2_KNOWN_HOSTS` and optional `EC2_USER`. An authorized SSH network path from the runner is required. Deployment updates the existing stack and keeps its environment file and persistent volumes.
+
+Run `scripts/test/integration.py`, then `resilience.py` and `failover.py` against the isolated test overlay. Failover checks include loss of the ZooKeeper leader and a Kafka broker. The test issuer is confined to the local test stack.

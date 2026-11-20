@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end checks against docker-compose.test.yml's isolated signed-JWT fixture."""
 import json
+import os
 import time
 import uuid
 import urllib.request
@@ -8,6 +9,7 @@ import urllib.error
 from datetime import date, timedelta
 
 def call(port, path, token=None, method='GET', body=None, expected=200):
+    port += int(os.environ.get('ELEGANCE_TEST_PORT_OFFSET', '0'))
     headers = {'Content-Type': 'application/json'}
     if token:
         headers['Authorization'] = 'Bearer ' + token
@@ -37,7 +39,7 @@ def until(check, timeout=180):
 def run():
     for port in range(8081, 8088):
         until(lambda: call(port, '/actuator/health'))
-    admin = call(19000, '/token?subject=test-admin&role=Admin')['accessToken']
+    admin = call(19000, '/token?subject=test-admin')['accessToken']
     client = call(19000, '/token?subject=test-client')['accessToken']
     other = call(19000, '/token?subject=other-client')['accessToken']
     call(8084, '/api/v1/services')
@@ -46,7 +48,7 @@ def run():
     call(8084, '/api/v1/services', client, 'POST', {}, 403)
     call(8087, '/api/v1/admin/kafka/topics', 'invalid', expected=401)
     for query in ['issuer=wrong-issuer', 'audience=wrong-audience', 'expired=true']:
-        invalid = call(19000, '/token?subject=test-admin&role=Admin&' + query)['accessToken']
+        invalid = call(19000, '/token?subject=test-admin&' + query)['accessToken']
         call(8087, '/api/v1/admin/kafka/topics', invalid, expected=401)
     own = call(8082, '/api/v1/clients/me', client)
     suffix = uuid.uuid4().hex[:8]

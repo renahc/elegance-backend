@@ -23,7 +23,8 @@
         "AZURE_AD_CLIENT_ID": "elegance-integration-api",
         "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
         "SPRING_PROFILES_ACTIVE": "demo",
-        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+        "JAVA_TOOL_OPTIONS": "-Xmx256m",
+        "ELEGANCE_ADMIN_OBJECT_ID": "test-admin"
       },
       "depends_on": {
         "test-issuer": {
@@ -41,7 +42,8 @@
         "AZURE_AD_CLIENT_ID": "elegance-integration-api",
         "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
         "SPRING_PROFILES_ACTIVE": "demo",
-        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+        "JAVA_TOOL_OPTIONS": "-Xmx256m",
+        "ELEGANCE_ADMIN_OBJECT_ID": "test-admin"
       },
       "depends_on": {
         "test-issuer": {
@@ -60,7 +62,8 @@
         "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
         "SPRING_PROFILES_ACTIVE": "demo",
         "JAVA_TOOL_OPTIONS": "-Xmx256m",
-        "MANAGEMENT_HEALTH_MAIL_ENABLED": "false"
+        "MANAGEMENT_HEALTH_MAIL_ENABLED": "false",
+        "ELEGANCE_ADMIN_OBJECT_ID": "test-admin"
       },
       "depends_on": {
         "test-issuer": {
@@ -78,7 +81,8 @@
         "AZURE_AD_CLIENT_ID": "elegance-integration-api",
         "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
         "SPRING_PROFILES_ACTIVE": "demo",
-        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+        "JAVA_TOOL_OPTIONS": "-Xmx256m",
+        "ELEGANCE_ADMIN_OBJECT_ID": "test-admin"
       },
       "depends_on": {
         "test-issuer": {
@@ -96,7 +100,8 @@
         "AZURE_AD_CLIENT_ID": "elegance-integration-api",
         "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
         "SPRING_PROFILES_ACTIVE": "demo",
-        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+        "JAVA_TOOL_OPTIONS": "-Xmx256m",
+        "ELEGANCE_ADMIN_OBJECT_ID": "test-admin"
       },
       "depends_on": {
         "test-issuer": {
@@ -114,7 +119,8 @@
         "AZURE_AD_CLIENT_ID": "elegance-integration-api",
         "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
         "SPRING_PROFILES_ACTIVE": "demo",
-        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+        "JAVA_TOOL_OPTIONS": "-Xmx256m",
+        "ELEGANCE_ADMIN_OBJECT_ID": "test-admin"
       },
       "depends_on": {
         "test-issuer": {
@@ -132,7 +138,8 @@
         "AZURE_AD_CLIENT_ID": "elegance-integration-api",
         "AZURE_AD_JWK_SET_URI": "http://test-issuer:19000/.well-known/jwks.json",
         "SPRING_PROFILES_ACTIVE": "demo",
-        "JAVA_TOOL_OPTIONS": "-Xmx256m"
+        "JAVA_TOOL_OPTIONS": "-Xmx256m",
+        "ELEGANCE_ADMIN_OBJECT_ID": "test-admin"
       },
       "depends_on": {
         "test-issuer": {

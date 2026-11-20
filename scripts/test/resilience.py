@@ -15,7 +15,7 @@ def command(*args, payload=None):
     return subprocess.run(COMPOSE + list(args), input=payload, text=True, capture_output=True, check=True).stdout
 
 def main():
-    admin = call(19000, '/token?subject=test-admin&role=Admin')['accessToken']
+    admin = call(19000, '/token?subject=test-admin')['accessToken']
     before = call(8085, '/api/v1/analytics', admin)
     events = call(8086, '/api/v1/audit?size=100', admin)['content']
     event = next(e for e in events if e['eventType'] == 'COMPLETED')

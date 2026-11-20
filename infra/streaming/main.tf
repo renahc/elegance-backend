@@ -125,52 +125,41 @@ resource "aws_instance" "streaming" {
   }
 }
 
-resource "aws_apigatewayv2_api" "streaming" {
-  name          = "elegance-streaming-http-api"
-  protocol_type = "HTTP"
-
-  cors_configuration {
-    allow_origins = ["*"]
-    allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    allow_headers = ["Authorization", "Content-Type", "X-Correlation-ID"]
-    max_age       = 300
-  }
+variable "backend_domain" {
+  type    = string
+  default = ""
 }
-
-resource "aws_apigatewayv2_integration" "streaming_root" {
-  api_id                 = aws_apigatewayv2_api.streaming.id
-  integration_type       = "HTTP_PROXY"
-  integration_method     = "ANY"
-  integration_uri        = "http://${aws_instance.streaming.public_ip}:80/"
-  payload_format_version = "1.0"
+locals {
+  backend_domain = var.backend_domain != "" ? var.backend_domain : "${aws_instance.streaming.public_ip}.sslip.io"
 }
-
-resource "aws_apigatewayv2_integration" "streaming_proxy" {
-  api_id                 = aws_apigatewayv2_api.streaming.id
-  integration_type       = "HTTP_PROXY"
-  integration_method     = "ANY"
-  integration_uri        = "http://${aws_instance.streaming.public_ip}:80/{proxy}"
-  payload_format_version = "1.0"
+module "gateway" {
+  source         = "../gateway"
+  backend_domain = local.backend_domain
 }
-
-resource "aws_apigatewayv2_route" "streaming_root" {
-  api_id    = aws_apigatewayv2_api.streaming.id
-  route_key = "ANY /"
-  target    = "integrations/${aws_apigatewayv2_integration.streaming_root.id}"
+moved {
+  from = aws_apigatewayv2_api.streaming
+  to   = module.gateway.aws_apigatewayv2_api.streaming
 }
-
-resource "aws_apigatewayv2_route" "streaming_proxy" {
-  api_id    = aws_apigatewayv2_api.streaming.id
-  route_key = "ANY /{proxy+}"
-  target    = "integrations/${aws_apigatewayv2_integration.streaming_proxy.id}"
+moved {
+  from = aws_apigatewayv2_integration.streaming_root
+  to   = module.gateway.aws_apigatewayv2_integration.streaming_root
 }
-
-resource "aws_apigatewayv2_stage" "streaming" {
-  api_id      = aws_apigatewayv2_api.streaming.id
-  name        = "$default"
-  auto_deploy = true
+moved {
+  from = aws_apigatewayv2_integration.streaming_proxy
+  to   = module.gateway.aws_apigatewayv2_integration.streaming_proxy
 }
-
+moved {
+  from = aws_apigatewayv2_route.streaming_root
+  to   = module.gateway.aws_apigatewayv2_route.streaming_root
+}
+moved {
+  from = aws_apigatewayv2_route.streaming_proxy
+  to   = module.gateway.aws_apigatewayv2_route.streaming_proxy
+}
+moved {
+  from = aws_apigatewayv2_stage.streaming
+  to   = module.gateway.aws_apigatewayv2_stage.streaming
+}
 output "host" {
   value = aws_instance.streaming.public_ip
 }
@@ -181,8 +170,13 @@ output "ssh_user" {
   value = "ubuntu"
 }
 output "api_gateway_url" {
-  description = "Base URL del API Gateway HTTP para el backend"
-  value       = trimsuffix(aws_apigatewayv2_stage.streaming.invoke_url, "/")
+  value = module.gateway.api_gateway_url
+}
+output "backend_domain" {
+  value = local.backend_domain
+}
+output "jwt_issuer" {
+  value = module.gateway.jwt_issuer
 }
 output "dashboard_tunnel" {
   value = "ssh -L 8090:127.0.0.1:8090 -L 15672:127.0.0.1:15672 ubuntu@${aws_instance.streaming.public_ip}"

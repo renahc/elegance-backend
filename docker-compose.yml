@@ -207,14 +207,15 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
         "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
         "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
-        "ADMIN_EMAILS": "${ADMIN_EMAILS:-}",
         "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
         "SERVICES_URL": "http://services-service:8084",
         "USERS_URL": "http://user-service:8082",
         "MAIL_USERNAME": "${MAIL_USERNAME:-}",
         "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
         "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
-        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}",
+        "ELEGANCE_ADMIN_OBJECT_ID": "${ELEGANCE_ADMIN_OBJECT_ID:-95c6c933-e369-4356-94f6-25c8b89a3919}",
+        "ELEGANCE_ADMIN_USERNAME": "${ELEGANCE_ADMIN_USERNAME:-re.herrerac@duocuc.cl}"
       },
       "ports": [
         "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:8082:8082"
@@ -254,14 +255,15 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
         "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
         "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
-        "ADMIN_EMAILS": "${ADMIN_EMAILS:-}",
         "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
         "SERVICES_URL": "http://services-service:8084",
         "USERS_URL": "http://user-service:8082",
         "MAIL_USERNAME": "${MAIL_USERNAME:-}",
         "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
         "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
-        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}",
+        "ELEGANCE_ADMIN_OBJECT_ID": "${ELEGANCE_ADMIN_OBJECT_ID:-95c6c933-e369-4356-94f6-25c8b89a3919}",
+        "ELEGANCE_ADMIN_USERNAME": "${ELEGANCE_ADMIN_USERNAME:-re.herrerac@duocuc.cl}"
       },
       "ports": [
         "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:8081:8081"
@@ -301,14 +303,15 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
         "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
         "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
-        "ADMIN_EMAILS": "${ADMIN_EMAILS:-}",
         "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
         "SERVICES_URL": "http://services-service:8084",
         "USERS_URL": "http://user-service:8082",
         "MAIL_USERNAME": "${MAIL_USERNAME:-}",
         "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
         "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
-        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}",
+        "ELEGANCE_ADMIN_OBJECT_ID": "${ELEGANCE_ADMIN_OBJECT_ID:-95c6c933-e369-4356-94f6-25c8b89a3919}",
+        "ELEGANCE_ADMIN_USERNAME": "${ELEGANCE_ADMIN_USERNAME:-re.herrerac@duocuc.cl}"
       },
       "ports": [
         "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:8083:8083"
@@ -348,14 +351,15 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
         "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
         "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
-        "ADMIN_EMAILS": "${ADMIN_EMAILS:-}",
         "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
         "SERVICES_URL": "http://services-service:8084",
         "USERS_URL": "http://user-service:8082",
         "MAIL_USERNAME": "${MAIL_USERNAME:-}",
         "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
         "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
-        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}",
+        "ELEGANCE_ADMIN_OBJECT_ID": "${ELEGANCE_ADMIN_OBJECT_ID:-95c6c933-e369-4356-94f6-25c8b89a3919}",
+        "ELEGANCE_ADMIN_USERNAME": "${ELEGANCE_ADMIN_USERNAME:-re.herrerac@duocuc.cl}"
       },
       "ports": [
         "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:8084:8084"
@@ -395,7 +399,6 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
         "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
         "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
-        "ADMIN_EMAILS": "${ADMIN_EMAILS:-}",
         "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
         "SERVICES_URL": "http://services-service:8084",
         "USERS_URL": "http://user-service:8082",
@@ -403,7 +406,9 @@
         "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
         "KAFKA_STATE_DIR": "/tmp/elegance-streams",
         "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx384m",
-        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}",
+        "ELEGANCE_ADMIN_OBJECT_ID": "${ELEGANCE_ADMIN_OBJECT_ID:-95c6c933-e369-4356-94f6-25c8b89a3919}",
+        "ELEGANCE_ADMIN_USERNAME": "${ELEGANCE_ADMIN_USERNAME:-re.herrerac@duocuc.cl}"
       },
       "ports": [
         "127.0.0.1:8085:8085"
@@ -443,14 +448,15 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
         "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
         "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
-        "ADMIN_EMAILS": "${ADMIN_EMAILS:-}",
         "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
         "SERVICES_URL": "http://services-service:8084",
         "USERS_URL": "http://user-service:8082",
         "MAIL_USERNAME": "${MAIL_USERNAME:-}",
         "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
         "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
-        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}",
+        "ELEGANCE_ADMIN_OBJECT_ID": "${ELEGANCE_ADMIN_OBJECT_ID:-95c6c933-e369-4356-94f6-25c8b89a3919}",
+        "ELEGANCE_ADMIN_USERNAME": "${ELEGANCE_ADMIN_USERNAME:-re.herrerac@duocuc.cl}"
       },
       "ports": [
         "127.0.0.1:8086:8086"
@@ -490,14 +496,15 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI}",
         "AZURE_AD_CLIENT_ID": "${AZURE_AD_CLIENT_ID}",
         "AZURE_AD_JWK_SET_URI": "${AZURE_AD_JWK_SET_URI}",
-        "ADMIN_EMAILS": "${ADMIN_EMAILS:-}",
         "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-default}",
         "SERVICES_URL": "http://services-service:8084",
         "USERS_URL": "http://user-service:8082",
         "MAIL_USERNAME": "${MAIL_USERNAME:-}",
         "MAIL_PASSWORD": "${MAIL_PASSWORD:-}",
         "JAVA_TOOL_OPTIONS": "-Xms64m -Xmx256m",
-        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}"
+        "KAFKA_CONCURRENCY": "${KAFKA_CONCURRENCY:-1}",
+        "ELEGANCE_ADMIN_OBJECT_ID": "${ELEGANCE_ADMIN_OBJECT_ID:-95c6c933-e369-4356-94f6-25c8b89a3919}",
+        "ELEGANCE_ADMIN_USERNAME": "${ELEGANCE_ADMIN_USERNAME:-re.herrerac@duocuc.cl}"
       },
       "ports": [
         "127.0.0.1:8087:8087"
@@ -526,7 +533,8 @@
         "443:443"
       ],
       "environment": {
-        "APP_DOMAIN": "${APP_DOMAIN:-localhost}"
+        "APP_DOMAIN": "${APP_DOMAIN:-localhost}",
+        "API_GATEWAY_URL": "${API_GATEWAY_URL:-}"
       },
       "volumes": [
         "./docker/Caddyfile:/etc/caddy/Caddyfile:ro",
