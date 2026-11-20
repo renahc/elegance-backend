@@ -6,6 +6,48 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
+        description: Deploy validated sources to the configured EC2
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  terraform:
+    name: Validate Terraform configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: terraform -chdir=infra/streaming fmt -check
+      - run: terraform -chdir=infra/streaming init -backend=false -lockfile=readonly
+      - run: terraform -chdir=infra/streaming validate
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - run: mvn -B -f elegance-backend-parent/pom.xml verify
+      - name: Integration with isolated test issuer
+        run: |
+          cp .env.example .env.integration
+          docker compose --env-file .env.integration -f docker-compose.yml -f docker-compose.test.yml -p elegance-integration up -d --build
+          ELEGANCE_TEST_ENV=.env.integration python3 scripts/test/integration.py
+      - name: Container diagnostics
+        if: failure()
+        run: docker compose --env-file .env.integration -f docker-compose.yml -f docker-compose.test.yml -p elegance-integration logs --tail=60
+      - name: Remove isolated test environment
+        if: always()
+        run: docker compose --env-file .env.integration -f docker-compose.yml -f docker-compose.test.yml -p elegance-integration down -v
+  deploy:
     if: github.event_name == 'workflow_dispatch' && inputs.deploy
     needs: [test, terraform]
     runs-on: ubuntu-latest
