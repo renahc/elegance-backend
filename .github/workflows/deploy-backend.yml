@@ -48,9 +48,7 @@ jobs:
         if: always()
         run: docker compose --env-file .env.integration -f docker-compose.yml -f docker-compose.test.yml -p elegance-integration down -v
   deploy:
-    if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.deploy) ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/kafka-ev3')
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
     needs: [test, terraform]
     outputs:
       ec2_host: ${{ steps.publish.outputs.ec2_host }}
